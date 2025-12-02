@@ -11,12 +11,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-* Wrong toolchain link in mini-kernel tutorial (see #73, @HanyzPAPU)
-* Wrong header guard (see #74, @HanyzPAPU, @vhotspur)
-* Document `-n` option (see #78, @PeterHero)
+* Use proper breakpoint size (see #96, @ceresek)
 
 ### Added
 
+* Missing documentation for `dlcd` (see #92, @rosenbergm)
+* Installation notes for Arch (see #92, , @rosenbergm)
+* Basic DAP debugging support (@0xVector)
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+
+## v3.0.1 - 2025-10-09
+
+### Fixed
+
+* Enable instruction tracing with `-t` on RISC-V 32 (see #93)
+
+
+## v3.0.0 - 2025-09-26
+
+### Fixed
+
+* Wrong toolchain link in mini-kernel tutorial (see #73, @HanyzPAPU)
+* Wrong header guard (see #74, @HanyzPAPU, @vhotspur)
+* Document `-n` option (see #78, @PeterHero)
+* Segfault on MacOS (see #90, @MatusJurcak)
+
+### Added
+
+* Support for RISC-V 64 (see #81, #82, #83, #84, @rosenbergm)
+* `dlcd` LCD display device (@rosenbergm)
 * Added Mini-kernel multiplatform tutorial (see #70, @HanyzPAPU)
 * RISC-V virtual memory commands tutorial (see #70, @HanyzPAPU)
 * CI builds on MacOS (see #76, #77, @vhotspur)
@@ -25,10 +54,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * Tutorial reorganization (see #70, @vhotspur)
-
-### Deprecated
-
-### Removed
 
 
 ## v2.3.1 - 2024-09-25
