@@ -381,7 +381,6 @@ static void machine_run(void)
                 dap_process();
             }
 
-            // TODO: avoid busy wait
             if (dap_state != DAP_RUNNING && dap_state != DAP_DONE) {
                 continue;
             }
