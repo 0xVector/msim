@@ -358,17 +358,15 @@ static bool dap_send_event(const dap_event_t event)
 
 void dap_close(void)
 {
-    if (connection_fd == -1) {
-        io_error("dap_already_closed");
+    if (connection_fd != -1) {
+        dap_send_event((dap_event_t){ExitedEvent, 0, 0});
+
+        if (close(connection_fd) == -1) {
+            io_error("dap_connection_fd");
+        }
+        connection_fd = -1;
     }
 
-    dap_send_event((dap_event_t){ExitedEvent, 0, 0});
-
-    if (close(connection_fd) == -1) {
-        io_error("dap_connection_fd");
-    }
-
-    connection_fd = -1;
     dap_state = DAP_DONE;
     machine_halt = true;
     alert("DAP connection closed.");
