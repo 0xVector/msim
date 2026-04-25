@@ -302,6 +302,7 @@ static void dap_startup(void)
 {
     if (get_cpu(0) == NULL) {
         error("Cannot debug without any processor");
+        dap_state = DAP_DONE;
         return;
     }
 
