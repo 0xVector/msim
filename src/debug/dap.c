@@ -3,12 +3,10 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <sys/types.h>
+#include <inttypes.h>
 
 #include "../assert.h"
 #include "../device/cpu/general_cpu.h"
-#include "../device/cpu/mips_r4000/cpu.h"
-#include "../device/cpu/riscv_rv32ima/cpu.h"
 #include "../fault.h"
 #include "../main.h"
 #include "dap.h"
@@ -21,7 +19,8 @@
 #endif
 
 static int connection_fd = -1;
-static unsigned int cpuno_global = 0; // Default CPU device number used
+static uint32_t cpuno_global = 0; // Default CPU device number used
+static uint64_t steps_left = 0; // Number of instruction steps to execute before pausing. 0 means infinite.
 
 typedef enum dap_request_type {
     /** Request to resume execution. Also used for the initial start. */
@@ -79,6 +78,9 @@ typedef enum dap_request_type {
     RaiseInterruptRequest = 0x14,
     /** Request to clear interrupt `arg0=id`. */
     ClearInterruptRequest = 0x15,
+
+    /** Request to get the value of configuration */
+    GetConfigRequest = 0x16,
 } dap_request_type_t;
 
 typedef enum dap_outbound_category {
@@ -121,6 +123,7 @@ typedef struct dap_request {
     dap_request_type_t type;
     uint64_t arg0;
     uint64_t arg1;
+    uint64_t arg2;
 } dap_request_t;
 
 /** Structure for DAP responses */
@@ -128,6 +131,7 @@ typedef struct dap_response {
     dap_response_status_t type;
     uint64_t arg0;
     uint64_t arg1;
+    uint64_t arg2;
 } dap_response_t;
 
 /** Structure for DAP events */
@@ -135,18 +139,19 @@ typedef struct dap_event {
     dap_event_type_t type;
     uint64_t arg0;
     uint64_t arg1;
+    uint64_t arg2;
 } dap_event_t;
 
 enum {
-    INBOUND_FRAME_SIZE = 17, /** Size of a single DAP request frame */
-    OUTBOUND_FRAME_SIZE = 18, /** Size of a single DAP response frame */
+    INBOUND_FRAME_SIZE = 25, /** Size of a single DAP request frame */
+    OUTBOUND_FRAME_SIZE = 26, /** Size of a single DAP response frame */
 };
 
-/** Length of an inbound frame is always 17 B = 1 B (type) + 8 B (arg0) + 8 B (arg1) */
-static_assert(INBOUND_FRAME_SIZE == sizeof(uint8_t) + 2 * sizeof(uint64_t), "DAP inbound frame must be exactly 17 bytes long");
+/** Length of an inbound frame is always 25 B = 1 B (type) + 8 B (arg0) + 8 B (arg1) + 8 B (arg2) */
+static_assert(INBOUND_FRAME_SIZE == sizeof(uint8_t) + 3 * sizeof(uint64_t), "DAP inbound frame must be exactly 25 bytes long");
 
-/** Length of an outbound frame is always 17 B = 1 B (category) + 1 B (status/type) + 8 B (arg0) + 8 B (arg1) */
-static_assert(OUTBOUND_FRAME_SIZE == sizeof(uint8_t) + sizeof(uint8_t) + 2 * sizeof(uint64_t), "DAP inbound frame must be exactly 18 bytes long");
+/** Length of an outbound frame is always 26 B = 1 B (category) + 1 B (status/type) + 8 B (arg0) + 8 B (arg1) + 8 B (arg2) */
+static_assert(OUTBOUND_FRAME_SIZE == sizeof(uint8_t) + sizeof(uint8_t) + 3 * sizeof(uint64_t), "DAP inbound frame must be exactly 26 bytes long");
 
 /** Internal buffer for incoming frames */
 static uint8_t frame_buffer[INBOUND_FRAME_SIZE];
@@ -195,6 +200,8 @@ bool dap_init(void)
 
         return false;
     }
+
+    steps_left = 0;
 
     alert("DAP connected.");
     return true;
@@ -307,13 +314,16 @@ static bool dap_receive_request(dap_request_t *out_cmd, const bool block)
 
     out_cmd->type = buffer[0];
 
-    uint64_t netorder_arg0;
-    uint64_t netorder_arg1;
-    memcpy(&netorder_arg0, buffer + sizeof(uint8_t), sizeof(netorder_arg0));
-    memcpy(&netorder_arg1, buffer + sizeof(uint8_t) + sizeof(netorder_arg0), sizeof(netorder_arg1));
+    uint64_t arg0_no;
+    uint64_t arg1_no;
+    uint64_t arg2_no;
+    memcpy(&arg0_no, buffer + sizeof(uint8_t), sizeof(arg0_no));
+    memcpy(&arg1_no, buffer + sizeof(uint8_t) + sizeof(arg0_no), sizeof(arg1_no));
+    memcpy(&arg2_no, buffer + sizeof(uint8_t) + sizeof(arg0_no) + sizeof(arg1_no), sizeof(arg2_no));
 
-    out_cmd->arg0 = be64toh(netorder_arg0);
-    out_cmd->arg1 = be64toh(netorder_arg1);
+    out_cmd->arg0 = be64toh(arg0_no);
+    out_cmd->arg1 = be64toh(arg1_no);
+    out_cmd->arg2 = be64toh(arg2_no);
 
     return true;
 }
@@ -329,10 +339,12 @@ static bool dap_send_response(const dap_response_t response)
     buffer[0] = ResponseCategory;
     buffer[1] = (uint8_t)response.type;
 
-    const uint64_t netorder_arg0 = htobe64(response.arg0);
-    const uint64_t netorder_arg1 = htobe64(response.arg1);
-    memcpy(buffer + 2, &netorder_arg0, sizeof(netorder_arg0));
-    memcpy(buffer + 2 + sizeof(netorder_arg0), &netorder_arg1, sizeof(netorder_arg1));
+    const uint64_t arg0_no = htobe64(response.arg0);
+    const uint64_t arg1_no = htobe64(response.arg1);
+    const uint64_t arg2_no = htobe64(response.arg2);
+    memcpy(buffer + 2, &arg0_no, sizeof(arg0_no));
+    memcpy(buffer + 2 + sizeof(arg0_no), &arg1_no, sizeof(arg1_no));
+    memcpy(buffer + 2 + sizeof(arg0_no) + sizeof(arg1_no), &arg2_no, sizeof(arg2_no));
 
     return dap_send_bytes(buffer);
 }
@@ -348,10 +360,12 @@ static bool dap_send_event(const dap_event_t event)
     buffer[0] = EventCategory;
     buffer[1] = (uint8_t)event.type;
 
-    const uint64_t netorder_arg0 = htobe64(event.arg0);
-    const uint64_t netorder_arg1 = htobe64(event.arg1);
-    memcpy(buffer + 2, &netorder_arg0, sizeof(netorder_arg0));
-    memcpy(buffer + 2 + sizeof(netorder_arg0), &netorder_arg1, sizeof(netorder_arg1));
+    const uint64_t arg0_no = htobe64(event.arg0);
+    const uint64_t arg1_no = htobe64(event.arg1);
+    const uint64_t arg2_no = htobe64(event.arg2);
+    memcpy(buffer + 2, &arg0_no, sizeof(arg0_no));
+    memcpy(buffer + 2 + sizeof(arg0_no), &arg1_no, sizeof(arg1_no));
+    memcpy(buffer + 2 + sizeof(arg0_no) + sizeof(arg1_no), &arg2_no, sizeof(arg2_no));
 
     return dap_send_bytes(buffer);
 }
@@ -359,7 +373,7 @@ static bool dap_send_event(const dap_event_t event)
 void dap_close(void)
 {
     if (connection_fd != -1) {
-        dap_send_event((dap_event_t){ExitedEvent, 0, 0});
+        dap_send_event((dap_event_t){ExitedEvent, 0x00, 0x00, 0x00});
 
         if (close(connection_fd) == -1) {
             io_error("dap_connection_fd");
@@ -377,7 +391,7 @@ void dap_close(void)
 void dap_event_hit_code_breakpoint(const uint64_t address)
 {
     dap_state = DAP_PAUSED;
-    dap_send_event((dap_event_t){StoppedAtEvent, address, StoppedReasonBreakpoint});
+    dap_send_event((dap_event_t){StoppedAtEvent, address, StoppedReasonBreakpoint, 0x00});
 }
 
 /* Handlers */
@@ -386,34 +400,34 @@ static void dap_handle_resume(void)
 {
     dap_state = DAP_RUNNING;
     alert("DAP: Resuming execution.");
-    dap_send_response((dap_response_t){ StatusOk, 0, 0 });
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
 static void dap_handle_pause(void)
 {
     dap_state = DAP_PAUSED;
     alert("DAP: Pausing execution.");
-    dap_send_response((dap_response_t){ StatusOk, 0, 0 });
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
     const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global));
-    dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, StoppedReasonPaused});
+    dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, StoppedReasonPaused, 0x00});
 }
 
-/** Set a DAP code breakpoint */
+/** Handle set code breakpoint request */
 static void dap_handle_set_code_breakpoint(const uint64_t addr)
 {
     const ptr64_t virt_addr = { addr };
     general_cpu_t* cpu = get_cpu(cpuno_global);
 
     if (!cpu_insert_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER)) {
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0, 0 }); // TODO: more specific err code
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
         return;
     }
 
     alert("Added DAP code breakpoint at address %#0" PRIx64, virt_addr.ptr);
-    dap_send_response((dap_response_t){ StatusOk, 0, 0 });
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
-/** Remove a DAP code breakpoint */
+/** Handle remove code breakpoint request */
 static void dap_handle_remove_code_breakpoint(const uint64_t addr)
 {
     const ptr64_t virt_addr = { addr };
@@ -421,16 +435,50 @@ static void dap_handle_remove_code_breakpoint(const uint64_t addr)
 
     if (!cpu_remove_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER)) {
         alert("No such breakpoint!");
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0, 0 }); // TODO: more specific err code
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
         return;
     }
 
     alert("Removed DAP code breakpoint from address %#0" PRIx64, virt_addr.ptr);
-    dap_send_response((dap_response_t){ StatusOk, 0, 0 });
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00 , 0x00});
+}
+
+static void dap_handle_step(const uint64_t count)
+{
+    steps_left = count;
+    dap_state = DAP_RUNNING;
+    alert("DAP: Stepping %lu instructions.", count);
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+}
+
+static void dap_handle_get_config(void)
+{
+    uint64_t cpu_count = 0;
+    general_cpu_t *cpu;
+    for_each(cpu_list, cpu, general_cpu_t) {
+        ++cpu_count;
+    }
+
+    dap_send_response((dap_response_t){ StatusOk, cpu_count, 0x00, 0x00});
+}
+
+static void dap_check_step(void)
+{
+    if (steps_left > 0) {
+        --steps_left;
+
+        if (steps_left == 0) {
+            dap_state = DAP_PAUSED;
+            const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global));
+            dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, StoppedReasonStep, 0x00});
+        }
+    }
 }
 
 void dap_process(void)
 {
+    dap_check_step();
+
     dap_request_t request = { 0 };
 
     while (dap_receive_request(&request, dap_state == DAP_PAUSED)) {
@@ -445,15 +493,21 @@ void dap_process(void)
             // Response is handled in dap_close which is always called at the end.
             dap_state = DAP_DONE;
             return;
+        case StepRequest:
+            dap_handle_step(request.arg0);
+            continue;
         case SetCodeBreakpointRequest:
             dap_handle_set_code_breakpoint(request.arg0);
             continue;
         case RemoveCodeBreakpointRequest:
             dap_handle_remove_code_breakpoint(request.arg0);
             continue;
+        case GetConfigRequest:
+            dap_handle_get_config();
+            continue;
         default:
             alert("Unknown DAP request type %u.", request.type);
-            dap_send_response((dap_response_t){ StatusUnsupportedRequestError, 0, 0 });
+            dap_send_response((dap_response_t){ StatusUnsupportedRequestError, 0x00, 0x00, 0x00});
         }
     }
 }
