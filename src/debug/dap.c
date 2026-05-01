@@ -18,6 +18,8 @@
   #define htobe64(x) OSSwapHostToBigInt64(x)
 #endif
 
+#define DAP_PREFIX "[DAP] "
+
 static int connection_fd = -1;
 static uint32_t cpuno_global = 0; // Default CPU device number used
 static uint64_t steps_left = 0; // Number of instruction steps to execute before pausing. 0 means infinite.
@@ -81,6 +83,8 @@ typedef enum dap_request_type {
 
     /** Request to get the value of configuration */
     GetConfigRequest = 0x16,
+    /** Request to get CPU-specific information for `arg0=cpu_id` */
+    GetCpuInfoRequest = 0x17,
 } dap_request_type_t;
 
 typedef enum dap_outbound_category {
@@ -186,14 +190,14 @@ bool dap_init(void)
         return false;
     }
 
-    alert("Listening for DAP connection on port %u.", dap_port);
+    alert(DAP_PREFIX "Listening for connection on port %u.", dap_port);
 
     struct sockaddr_in sa_dap;
     socklen_t address_len = sizeof(sa_dap);
     connection_fd = accept(sock, (struct sockaddr *) &sa_dap, &address_len);
     if (connection_fd < 0) {
         if (errno == EINTR) {
-            alert("DAP: Interrupted");
+            alert(DAP_PREFIX "Interrupted");
         } else {
             io_error("dap_accept");
         }
@@ -203,7 +207,7 @@ bool dap_init(void)
 
     steps_left = 0;
 
-    alert("DAP connected.");
+    alert(DAP_PREFIX "Connected.");
     return true;
 }
 
@@ -230,7 +234,7 @@ static bool dap_receive_bytes(void* buf, const bool block)
     ASSERT(buf != NULL);
     ASSERT(write_buffer + need_bytes <= frame_buffer + INBOUND_FRAME_SIZE); // No overflow check
 
-    const int flags = block ? 0 : MSG_DONTWAIT;
+    const int flags = block ? MSG_WAITALL : MSG_DONTWAIT;
     const ssize_t received = recv(connection_fd, write_buffer, need_bytes, flags);
 
     // Received
@@ -383,7 +387,20 @@ void dap_close(void)
 
     dap_state = DAP_DONE;
     machine_halt = true;
-    alert("DAP connection closed.");
+    alert(DAP_PREFIX "Connection closed.");
+}
+
+/* Generic DAP helpers */
+
+// Get the CPU with the given ID, or respond with an error if no such CPU exists. Returns NULL in this case.
+static general_cpu_t* get_cpu_or_respond_error(const uint64_t cpu_id)
+{
+    general_cpu_t* cpu = get_cpu(cpu_id);
+    if (cpu == NULL) {
+        alert(DAP_PREFIX "No such CPU with ID %lu!", cpu_id);
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+    }
+    return cpu;
 }
 
 /* Simulator events */
@@ -391,6 +408,7 @@ void dap_close(void)
 void dap_event_hit_code_breakpoint(const uint64_t address)
 {
     dap_state = DAP_PAUSED;
+    alert(DAP_PREFIX "Hit code breakpoint at address %#018" PRIx64 ", stopping", address);
     dap_send_event((dap_event_t){StoppedAtEvent, address, StoppedReasonBreakpoint, 0x00});
 }
 
@@ -399,16 +417,16 @@ void dap_event_hit_code_breakpoint(const uint64_t address)
 static void dap_handle_resume(void)
 {
     dap_state = DAP_RUNNING;
-    alert("DAP: Resuming execution.");
+    alert(DAP_PREFIX "Resuming execution.");
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
 static void dap_handle_pause(void)
 {
     dap_state = DAP_PAUSED;
-    alert("DAP: Pausing execution.");
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
-    const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global));
+    const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global)); // TODO: handle CPUs
+    alert(DAP_PREFIX "Pausing execution.");
     dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, StoppedReasonPaused, 0x00});
 }
 
@@ -416,14 +434,14 @@ static void dap_handle_pause(void)
 static void dap_handle_set_code_breakpoint(const uint64_t addr)
 {
     const ptr64_t virt_addr = { addr };
-    general_cpu_t* cpu = get_cpu(cpuno_global);
+    general_cpu_t* cpu = get_cpu(cpuno_global); // TODO: handle CPUs
 
     if (!cpu_insert_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER)) {
         dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
         return;
     }
 
-    alert("Added DAP code breakpoint at address %#0" PRIx64, virt_addr.ptr);
+    alert(DAP_PREFIX "Added code breakpoint at address %#0" PRIx64, virt_addr.ptr);
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
@@ -431,23 +449,55 @@ static void dap_handle_set_code_breakpoint(const uint64_t addr)
 static void dap_handle_remove_code_breakpoint(const uint64_t addr)
 {
     const ptr64_t virt_addr = { addr };
-    general_cpu_t* cpu = get_cpu(cpuno_global);
+    general_cpu_t* cpu = get_cpu(cpuno_global); // TODO: handle CPUs
 
     if (!cpu_remove_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER)) {
-        alert("No such breakpoint!");
+        alert(DAP_PREFIX "No such breakpoint!");
         dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
         return;
     }
 
-    alert("Removed DAP code breakpoint from address %#0" PRIx64, virt_addr.ptr);
+    alert(DAP_PREFIX "Removed code breakpoint from address %#0" PRIx64, virt_addr.ptr);
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00 , 0x00});
 }
 
 static void dap_handle_step(const uint64_t count)
 {
     steps_left = count;
-    dap_state = DAP_RUNNING;
-    alert("DAP: Stepping %lu instructions.", count);
+    dap_state = DAP_RUNNING; // Step implicitly resumes
+    alert(DAP_PREFIX "Stepping %lu instructions.", count);
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+}
+
+static void dap_handle_read_register(const uint64_t cpu_id, const uint64_t reg_id)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    uint64_t reg_value = 0;
+    if (!cpu_get_reg(cpu, reg_id, &reg_value)) {
+        alert(DAP_PREFIX "Failed to read general register ID %lu!", reg_id);
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        return;
+    }
+
+    // Too verbose
+    // alert(DAP_PREFIX "Received ReadGeneralRegisterRequest for register ID %lu (state: %u)", reg_id, dap_state);
+    dap_send_response((dap_response_t){ StatusOk, reg_value, 0x00, 0x00});
+}
+
+static void dap_handle_write_register(const uint64_t cpu_id, const uint64_t reg_id, const uint64_t value)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    if (!cpu_set_reg(cpu, reg_id, value)) {
+        alert(DAP_PREFIX "Failed to write general register ID %lu!", reg_id);
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        return;
+    }
+
+    alert(DAP_PREFIX "Received WriteGeneralRegisterRequest for register ID %lu with value %#0" PRIx64, reg_id, value);
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
@@ -459,7 +509,33 @@ static void dap_handle_get_config(void)
         ++cpu_count;
     }
 
+    alert(DAP_PREFIX "Received GetConfigRequest, reporting %lu CPUs.", cpu_count);
     dap_send_response((dap_response_t){ StatusOk, cpu_count, 0x00, 0x00});
+}
+
+static void dap_handle_get_cpu_info(const uint64_t cpu_id)
+{
+    alert(DAP_PREFIX "Received GetCpuInfoRequest for CPU ID %lu", cpu_id);
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    uint64_t arch_val = 0x00;
+    switch (cpu_get_arch(cpu)) {
+    case CpuArchMips:
+        arch_val = 0x01;
+        break;
+    case CpuArchRiscV32:
+        arch_val = 0x02;
+        break;
+    case CpuArchRiscV64:
+        arch_val = 0x03;
+        break;
+    default:
+        alert(DAP_PREFIX "CPU with ID %lu has unknown architecture %u!", cpu_id, cpu->type->arch);
+        arch_val = 0xFF;
+    }
+
+    dap_send_response((dap_response_t){ StatusOk, arch_val, 0x00, 0x00});
 }
 
 static void dap_check_step(void)
@@ -469,7 +545,8 @@ static void dap_check_step(void)
 
         if (steps_left == 0) {
             dap_state = DAP_PAUSED;
-            const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global));
+            const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global)); // TODO: handle CPUs
+            alert(DAP_PREFIX "Finished stepping, now paused at address %#0" PRIx64, address.ptr);
             dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, StoppedReasonStep, 0x00});
         }
     }
@@ -502,11 +579,21 @@ void dap_process(void)
         case RemoveCodeBreakpointRequest:
             dap_handle_remove_code_breakpoint(request.arg0);
             continue;
+        case ReadGeneralRegisterRequest:
+            dap_handle_read_register(request.arg0, request.arg1);
+            continue;
+        case WriteGeneralRegisterRequest:
+            dap_handle_write_register(request.arg0, request.arg1, request.arg2);
+            continue;
         case GetConfigRequest:
             dap_handle_get_config();
             continue;
+        case GetCpuInfoRequest:
+            dap_handle_get_cpu_info(request.arg0);
+            continue;
+
         default:
-            alert("Unknown DAP request type %u.", request.type);
+            alert(DAP_PREFIX "Unknown request type %u.", request.type);
             dap_send_response((dap_response_t){ StatusUnsupportedRequestError, 0x00, 0x00, 0x00});
         }
     }
