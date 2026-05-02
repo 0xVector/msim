@@ -408,7 +408,7 @@ static general_cpu_t* get_cpu_or_respond_error(const uint64_t cpu_id)
 void dap_event_hit_code_breakpoint(const uint64_t address)
 {
     dap_state = DAP_PAUSED;
-    alert(DAP_PREFIX "Hit code breakpoint at address %#018" PRIx64 ", stopping", address);
+    alert(DAP_PREFIX "Hit code breakpoint at address %#0" PRIx64 ", stopping", address);
     dap_send_event((dap_event_t){StoppedAtEvent, address, StoppedReasonBreakpoint, 0x00});
 }
 
@@ -481,8 +481,6 @@ static void dap_handle_read_register(const uint64_t cpu_id, const uint64_t reg_i
         return;
     }
 
-    // Too verbose
-    // alert(DAP_PREFIX "Received ReadGeneralRegisterRequest for register ID %lu (state: %u)", reg_id, dap_state);
     dap_send_response((dap_response_t){ StatusOk, reg_value, 0x00, 0x00});
 }
 
@@ -498,6 +496,57 @@ static void dap_handle_write_register(const uint64_t cpu_id, const uint64_t reg_
     }
 
     alert(DAP_PREFIX "Received WriteGeneralRegisterRequest for register ID %lu with value %#0" PRIx64, reg_id, value);
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+}
+
+static void dap_handle_read_csr(const uint64_t cpu_id, const uint64_t reg_id)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    uint64_t reg_value = 0;
+    if (!cpu_get_csr(cpu, reg_id, &reg_value)) {
+        alert(DAP_PREFIX "Failed to read CSR %#0" PRIx64 "!", reg_id);
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        return;
+    }
+
+    dap_send_response((dap_response_t){ StatusOk, reg_value, 0x00, 0x00});
+}
+
+static void dap_handle_write_csr(const uint64_t cpu_id, const uint64_t reg_id, const uint64_t value)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    if (!cpu_set_csr(cpu, reg_id, value)) {
+        alert(DAP_PREFIX "Failed to write CSR %#0" PRIx64 "!", reg_id);
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        return;
+    }
+
+    alert(DAP_PREFIX "Received WriteGeneralRegisterRequest for register ID %lu with value %#0" PRIx64, reg_id, value);
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+}
+
+static void dap_handle_read_pc(const uint64_t cpu_id)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    const ptr64_t pc = cpu_get_pc(cpu);
+    dap_send_response((dap_response_t){ StatusOk, pc.ptr, 0x00, 0x00});
+}
+
+static void dap_handle_write_pc(const uint64_t cpu_id, const uint64_t value)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    const ptr64_t pc = { value };
+    cpu_set_pc(cpu, pc);
+
+    alert(DAP_PREFIX "Received WritePCRequest with value %#0" PRIx64, value);
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
@@ -584,6 +633,18 @@ void dap_process(void)
             continue;
         case WriteGeneralRegisterRequest:
             dap_handle_write_register(request.arg0, request.arg1, request.arg2);
+            continue;
+        case ReadCsrRequest:
+            dap_handle_read_csr(request.arg0, request.arg1);
+            continue;
+        case WriteCsrRequest:
+            dap_handle_write_csr(request.arg0, request.arg1, request.arg2);
+            continue;
+        case ReadPCRequest:
+            dap_handle_read_pc(request.arg0);
+            continue;
+        case WritePCRequest:
+            dap_handle_write_pc(request.arg0, request.arg1);
             continue;
         case GetConfigRequest:
             dap_handle_get_config();
