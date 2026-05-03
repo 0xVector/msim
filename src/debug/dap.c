@@ -212,6 +212,8 @@ bool dap_init(void)
     return true;
 }
 
+/* MSIM DAP protocol implementation */
+
 /** Receive bytes from DAP connection
  *
  * This will try to receive `INBOUND_FRAME_SIZE` bytes and store
@@ -375,6 +377,8 @@ static bool dap_send_event(const dap_event_t event)
     return dap_send_bytes(buffer);
 }
 
+/* DAP state transitions */
+
 void dap_close(void)
 {
     if (connection_fd != -1) {
@@ -390,6 +394,19 @@ void dap_close(void)
     dap_state = DAP_DONE;
     machine_halt = true;
     alert(DAP_PREFIX "Connection closed.");
+}
+
+// Pause the simulation and send a pause event, if not already paused with the given reason.
+static void dap_pause(const dap_stopped_reason_t stop_reason)
+{
+    if (dap_state == DAP_PAUSED) {
+        return;
+    }
+
+    dap_state = DAP_PAUSED;
+    const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global)); // TODO: handle CPUs
+    dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, stop_reason, 0x00});
+    alert(DAP_PREFIX "Pausing execution due to reason: %u", stop_reason);
 }
 
 /* Generic DAP helpers */
@@ -409,8 +426,8 @@ static general_cpu_t* get_cpu_or_respond_error(const uint64_t cpu_id)
 
 void dap_event_hit_code_breakpoint(const uint64_t address)
 {
-    dap_state = DAP_PAUSED;
     alert(DAP_PREFIX "Hit code breakpoint at address %#0" PRIx64 ", stopping", address);
+    dap_state = DAP_PAUSED; // Can't hit BP while paused, so we must have been running
     dap_send_event((dap_event_t){StoppedAtEvent, address, StoppedReasonBreakpoint, 0x00});
 }
 
@@ -425,11 +442,8 @@ static void dap_handle_resume(void)
 
 static void dap_handle_pause(void)
 {
-    dap_state = DAP_PAUSED;
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
-    const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global)); // TODO: handle CPUs
-    alert(DAP_PREFIX "Pausing execution.");
-    dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, StoppedReasonPaused, 0x00});
+    dap_pause(StoppedReasonPaused);
 }
 
 static void dap_handle_terminate(void)
@@ -644,10 +658,8 @@ static void dap_check_step(void)
         --steps_left;
 
         if (steps_left == 0) {
-            dap_state = DAP_PAUSED;
-            const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global)); // TODO: handle CPUs
-            alert(DAP_PREFIX "Finished stepping, now paused at address %#0" PRIx64, address.ptr);
-            dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, StoppedReasonStep, 0x00});
+            alert(DAP_PREFIX "Finished stepping.");
+            dap_pause(StoppedReasonStep);
         }
     }
 }
