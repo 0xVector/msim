@@ -1,9 +1,9 @@
 #include <errno.h>
+#include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <inttypes.h>
 
 #include "../assert.h"
 #include "../device/cpu/general_cpu.h"
@@ -19,6 +19,7 @@
 #endif
 
 #define DAP_PREFIX "[DAP] "
+#define DAP_ARG_COUNT 3
 
 static int connection_fd = -1;
 static uint32_t cpuno_global = 0; // Default CPU device number used
@@ -119,7 +120,6 @@ typedef enum dap_stopped_reason {
     StoppedReasonStep = 0x03,
     /** Stopped due to an interrupt. */
     StoppedReasonInterrupt = 0x04,
-
 } dap_stopped_reason_t;
 
 /** Structure for DAP requests */
@@ -152,10 +152,10 @@ enum {
 };
 
 /** Length of an inbound frame is always 25 B = 1 B (type) + 8 B (arg0) + 8 B (arg1) + 8 B (arg2) */
-static_assert(INBOUND_FRAME_SIZE == sizeof(uint8_t) + 3 * sizeof(uint64_t), "DAP inbound frame must be exactly 25 bytes long");
+static_assert(INBOUND_FRAME_SIZE == sizeof(uint8_t) + DAP_ARG_COUNT * sizeof(uint64_t), "DAP inbound frame must be exactly 25 bytes long");
 
 /** Length of an outbound frame is always 26 B = 1 B (category) + 1 B (status/type) + 8 B (arg0) + 8 B (arg1) + 8 B (arg2) */
-static_assert(OUTBOUND_FRAME_SIZE == sizeof(uint8_t) + sizeof(uint8_t) + 3 * sizeof(uint64_t), "DAP inbound frame must be exactly 26 bytes long");
+static_assert(OUTBOUND_FRAME_SIZE == sizeof(uint8_t) + sizeof(uint8_t) + DAP_ARG_COUNT * sizeof(uint64_t), "DAP inbound frame must be exactly 26 bytes long");
 
 /** Internal buffer for incoming frames */
 static uint8_t frame_buffer[INBOUND_FRAME_SIZE];
@@ -321,9 +321,9 @@ static bool dap_receive_request(dap_request_t *out_cmd, const bool block)
     uint64_t arg0_no;
     uint64_t arg1_no;
     uint64_t arg2_no;
-    memcpy(&arg0_no, buffer + sizeof(uint8_t), sizeof(arg0_no));
-    memcpy(&arg1_no, buffer + sizeof(uint8_t) + sizeof(arg0_no), sizeof(arg1_no));
-    memcpy(&arg2_no, buffer + sizeof(uint8_t) + sizeof(arg0_no) + sizeof(arg1_no), sizeof(arg2_no));
+    memcpy(&arg0_no, buffer + sizeof(uint8_t) + 0 * sizeof(uint64_t), sizeof(arg0_no));
+    memcpy(&arg1_no, buffer + sizeof(uint8_t) + 1 * sizeof(uint64_t), sizeof(arg1_no));
+    memcpy(&arg2_no, buffer + sizeof(uint8_t) + 2 * sizeof(uint64_t), sizeof(arg2_no));
 
     out_cmd->arg0 = be64toh(arg0_no);
     out_cmd->arg1 = be64toh(arg1_no);
@@ -346,9 +346,9 @@ static bool dap_send_response(const dap_response_t response)
     const uint64_t arg0_no = htobe64(response.arg0);
     const uint64_t arg1_no = htobe64(response.arg1);
     const uint64_t arg2_no = htobe64(response.arg2);
-    memcpy(buffer + 2, &arg0_no, sizeof(arg0_no));
-    memcpy(buffer + 2 + sizeof(arg0_no), &arg1_no, sizeof(arg1_no));
-    memcpy(buffer + 2 + sizeof(arg0_no) + sizeof(arg1_no), &arg2_no, sizeof(arg2_no));
+    memcpy(buffer + sizeof(uint8_t) + sizeof(uint8_t) + 0 * sizeof(uint64_t), &arg0_no, sizeof(arg0_no));
+    memcpy(buffer + sizeof(uint8_t) + sizeof(uint8_t) + 1 * sizeof(uint64_t), &arg1_no, sizeof(arg1_no));
+    memcpy(buffer + sizeof(uint8_t) + sizeof(uint8_t) + 2 * sizeof(uint64_t), &arg2_no, sizeof(arg2_no));
 
     return dap_send_bytes(buffer);
 }
@@ -367,9 +367,9 @@ static bool dap_send_event(const dap_event_t event)
     const uint64_t arg0_no = htobe64(event.arg0);
     const uint64_t arg1_no = htobe64(event.arg1);
     const uint64_t arg2_no = htobe64(event.arg2);
-    memcpy(buffer + 2, &arg0_no, sizeof(arg0_no));
-    memcpy(buffer + 2 + sizeof(arg0_no), &arg1_no, sizeof(arg1_no));
-    memcpy(buffer + 2 + sizeof(arg0_no) + sizeof(arg1_no), &arg2_no, sizeof(arg2_no));
+    memcpy(buffer + sizeof(uint8_t) + sizeof(uint8_t) + 0 * sizeof(uint64_t), &arg0_no, sizeof(arg0_no));
+    memcpy(buffer + sizeof(uint8_t) + sizeof(uint8_t) + 1 * sizeof(uint64_t), &arg1_no, sizeof(arg1_no));
+    memcpy(buffer + sizeof(uint8_t) + sizeof(uint8_t) + 2 * sizeof(uint64_t), &arg2_no, sizeof(arg2_no));
 
     return dap_send_bytes(buffer);
 }
