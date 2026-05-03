@@ -9,6 +9,7 @@
 #include "../device/cpu/general_cpu.h"
 #include "../fault.h"
 #include "../main.h"
+#include "../physmem.h"
 #include "dap.h"
 
 // be64toh is not on macOS
@@ -550,6 +551,47 @@ static void dap_handle_write_pc(const uint64_t cpu_id, const uint64_t value)
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
+static void dap_handle_read_phys_memory(const uint64_t address)
+{
+    // Physical addresses are at most 36 bits
+    if (address & ~(uint64_t)0xfffffffff) {
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00});
+        return;
+    }
+    const ptr36_t phys_addr = address;
+
+    // Read by uint8 to not have to worry about alignment
+    uint8_t buffer[DAP_ARG_COUNT * sizeof(uint64_t)] = { 0 };
+    for (size_t i = 0; i < sizeof(buffer); ++i) {
+        buffer[i] = physmem_read8(-1, phys_addr + i, false);
+    }
+
+    dap_response_t response = { .type = StatusOk };
+    memcpy(&response.arg0, buffer + 0 * sizeof(uint64_t), sizeof(response.arg0));
+    memcpy(&response.arg1, buffer + 1 * sizeof(uint64_t), sizeof(response.arg1));
+    memcpy(&response.arg2, buffer + 2 * sizeof(uint64_t), sizeof(response.arg2));
+
+    // alert(DAP_PREFIX "Received ReadPhysMemoryRequest for address %#0" PRIx64 ", returning data %#0" PRIx64 "%#0" PRIx64 "%#0" PRIx64, address, response.arg0, response.arg1, response.arg2);
+    dap_send_response(response);
+}
+
+static void dap_handle_read_virt_memory(const uint64_t cpu_id, const uint64_t address)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    const ptr64_t virt_addr = {.ptr = address};
+    ptr36_t phys_addr = 0;
+    if (!cpu_convert_addr(cpu, virt_addr, &phys_addr, false)) {
+        alert(DAP_PREFIX "Failed to translate virtual address %#0" PRIx64 "!", address);
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        return;
+    }
+
+    // alert(DAP_PREFIX "Received ReadVirtMemoryRequest for virtual address %#0" PRIx64 ", translated to physical address %#0" PRIx64, address, phys_addr);
+    dap_handle_read_phys_memory(phys_addr);
+}
+
 static void dap_handle_get_config(void)
 {
     uint64_t cpu_count = 0;
@@ -645,6 +687,12 @@ void dap_process(void)
             continue;
         case WritePCRequest:
             dap_handle_write_pc(request.arg0, request.arg1);
+            continue;
+        case ReadPhysMemoryRequest:
+            dap_handle_read_phys_memory(request.arg0);
+            continue;
+        case ReadVirtMemoryRequest:
+            dap_handle_read_virt_memory(request.arg0, request.arg1);
             continue;
         case GetConfigRequest:
             dap_handle_get_config();
