@@ -31,8 +31,8 @@ typedef enum dap_request_type {
     ResumeRequest = 0x01,
     /** Request to pause execution. */
     PauseRequest = 0x02,
-    /** Request to stop execution and exit the simulator. */
-    StopRequest = 0x03,
+    /** Request to terminate execution and exit the simulator. */
+    TerminateRequest = 0x03,
     /** Request to step `arg0=count` instructions. */
     StepRequest = 0x04,
 
@@ -106,8 +106,8 @@ typedef enum dap_response_status {
 } dap_response_status_t;
 
 typedef enum dap_event_type {
-    /** Event indicating that the simulator has exited. */
-    ExitedEvent = 0x01,
+    /** Event indicating that the simulator has terminated. */
+    TerminatedEvent = 0x01,
     /** Event indicating that the simulator has paused execution. */
     StoppedAtEvent = 0x02,
 } dap_event_type_t;
@@ -378,7 +378,8 @@ static bool dap_send_event(const dap_event_t event)
 void dap_close(void)
 {
     if (connection_fd != -1) {
-        dap_send_event((dap_event_t){ExitedEvent, 0x00, 0x00, 0x00});
+        alert(DAP_PREFIX "Sending terminated event.");
+        dap_send_event((dap_event_t){TerminatedEvent, 0x00, 0x00, 0x00});
 
         if (close(connection_fd) == -1) {
             io_error("dap_connection_fd");
@@ -429,6 +430,14 @@ static void dap_handle_pause(void)
     const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global)); // TODO: handle CPUs
     alert(DAP_PREFIX "Pausing execution.");
     dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, StoppedReasonPaused, 0x00});
+}
+
+static void dap_handle_terminate(void)
+{
+    alert(DAP_PREFIX "Got terminate request, exiting.");
+    // Exited event is handled in dap_close(), which is always called at the end.
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+    dap_state = DAP_DONE;
 }
 
 /** Handle set code breakpoint request */
@@ -657,9 +666,8 @@ void dap_process(void)
         case PauseRequest:
             dap_handle_pause();
             continue;
-        case StopRequest:
-            // Response is handled in dap_close which is always called at the end.
-            dap_state = DAP_DONE;
+        case TerminateRequest:
+            dap_handle_terminate();
             return;
         case StepRequest:
             dap_handle_step(request.arg0);
