@@ -23,17 +23,18 @@
 #define DAP_ARG_COUNT 3
 
 static int connection_fd = -1;
-static uint32_t cpuno_global = 0; // Default CPU device number used
-static uint64_t steps_left = 0; // Number of instruction steps to execute before pausing. 0 means infinite.
+static uint32_t cpuno_default = 0; // Default CPU device number used
 
 typedef enum dap_request_type {
+    // TODO: update comments to reflect the actual state of the protocol
+
     /** Request to resume execution. Also used for the initial start. */
     ResumeRequest = 0x01,
     /** Request to pause execution. */
     PauseRequest = 0x02,
     /** Request to terminate execution and exit the simulator. */
     TerminateRequest = 0x03,
-    /** Request to step `arg0=count` instructions. */
+    /** Request to step `arg0=cpu` by `arg1=count` instructions. */
     StepRequest = 0x04,
 
     // Breakpoint requests
@@ -48,19 +49,19 @@ typedef enum dap_request_type {
     RemoveDataBreakpointRequest = 0x08,
 
     // Register requests
-    /** Request to read the value of register `arg0=id`. */
+    /** Request to read the value of register `arg1=id` in `arg0=cpu`. */
     ReadGeneralRegisterRequest = 0x09,
-    /** Request to write to register `arg0=id` the value `arg1=value`. */
+    /** Request to write to register `arg1=id` in `arg0=cpu` the value `arg2=value`. */
     WriteGeneralRegisterRequest = 0x0A,
 
-    /** Request to read the value of Control and Status Register (CSR) `arg0=id`. */
+    /** Request to read the value of Control and Status Register (CSR) `arg1=id` in `arg0=cpu`. */
     ReadCsrRequest = 0x0B,
-    /** Request to write to Control and Status Register (CSR) `arg0=id` the value `arg1=value`. */
+    /** Request to write to Control and Status Register (CSR) `arg1=id` the value `arg2=value` in `arg0=cpu`. */
     WriteCsrRequest = 0x0C,
 
-    /** Request to read the value of the program counter. */
+    /** Request to read the value of the program counter of `arg0=cpu`. */
     ReadPCRequest = 0x0D,
-    /** Request to write `arg0=value` to the program counter. */
+    /** Request to write `arg1=value` to the program counter of `arg0=cpu`. */
     WritePCRequest = 0x0E,
 
     // Memory requests
@@ -108,7 +109,7 @@ typedef enum dap_response_status {
 typedef enum dap_event_type {
     /** Event indicating that the simulator has terminated. */
     TerminatedEvent = 0x01,
-    /** Event indicating that the simulator has paused execution. */
+    /** Event indicating that the simulator has paused execution with `arg0=cpu` at `arg1=address` due to `arg2=reason` */
     StoppedAtEvent = 0x02,
 } dap_event_type_t;
 
@@ -205,8 +206,6 @@ bool dap_init(void)
 
         return false;
     }
-
-    steps_left = 0;
 
     alert(DAP_PREFIX "Connected.");
     return true;
@@ -396,19 +395,6 @@ void dap_close(void)
     alert(DAP_PREFIX "Connection closed.");
 }
 
-// Pause the simulation and send a pause event, if not already paused with the given reason.
-static void dap_pause(const dap_stopped_reason_t stop_reason)
-{
-    if (dap_state == DAP_PAUSED) {
-        return;
-    }
-
-    dap_state = DAP_PAUSED;
-    const ptr64_t address = cpu_get_pc(get_cpu(cpuno_global)); // TODO: handle CPUs
-    dap_send_event((dap_event_t){StoppedAtEvent, address.ptr, stop_reason, 0x00});
-    alert(DAP_PREFIX "Pausing execution due to reason: %u", stop_reason);
-}
-
 /* Generic DAP helpers */
 
 // Get the CPU with the given ID, or respond with an error if no such CPU exists. Returns NULL in this case.
@@ -443,7 +429,17 @@ static void dap_handle_resume(void)
 static void dap_handle_pause(void)
 {
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
-    dap_pause(StoppedReasonPaused);
+
+    // Avoid duplicate events
+    if (dap_state == DAP_PAUSED) {
+        return;
+    }
+
+    dap_send_event((dap_event_t){StoppedAtEvent,
+            cpuno_default, cpu_get_pc(get_cpu(cpuno_default)).ptr, StoppedReasonPaused});
+
+    alert(DAP_PREFIX "Pausing execution.");
+    dap_state = DAP_PAUSED;
 }
 
 static void dap_handle_terminate(void)
@@ -458,7 +454,7 @@ static void dap_handle_terminate(void)
 static void dap_handle_set_code_breakpoint(const uint64_t addr)
 {
     const ptr64_t virt_addr = { addr };
-    general_cpu_t* cpu = get_cpu(cpuno_global); // TODO: handle CPUs
+    general_cpu_t* cpu = get_cpu(cpuno_default); // TODO: handle CPUs
 
     if (!cpu_insert_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER)) {
         dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
@@ -473,7 +469,7 @@ static void dap_handle_set_code_breakpoint(const uint64_t addr)
 static void dap_handle_remove_code_breakpoint(const uint64_t addr)
 {
     const ptr64_t virt_addr = { addr };
-    general_cpu_t* cpu = get_cpu(cpuno_global); // TODO: handle CPUs
+    general_cpu_t* cpu = get_cpu(cpuno_default); // TODO: handle CPUs
 
     if (!cpu_remove_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER)) {
         alert(DAP_PREFIX "No such breakpoint!");
@@ -485,11 +481,17 @@ static void dap_handle_remove_code_breakpoint(const uint64_t addr)
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00 , 0x00});
 }
 
-static void dap_handle_step(const uint64_t count)
+static void dap_handle_step(const uint64_t cpu_id, const uint64_t count)
 {
-    steps_left = count;
-    dap_state = DAP_RUNNING; // Step implicitly resumes
-    alert(DAP_PREFIX "Stepping %lu instructions.", count);
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    if (count > 0) {
+        dap_state = DAP_RUNNING; // Step implicitly resumes
+    }
+
+    cpu->steps_left = count;
+    alert(DAP_PREFIX "Stepping %lu instructions on CPU %lu.", count, cpu_id);
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
@@ -654,12 +656,14 @@ static void dap_handle_get_cpu_info(const uint64_t cpu_id)
 
 static void dap_check_step(void)
 {
-    if (steps_left > 0) {
-        --steps_left;
-
-        if (steps_left == 0) {
-            alert(DAP_PREFIX "Finished stepping.");
-            dap_pause(StoppedReasonStep);
+    general_cpu_t* cpu = NULL;
+    for_each(cpu_list, cpu, general_cpu_t)
+    {
+        if (cpu->steps_left > 0 && --cpu->steps_left == 0) {
+            alert(DAP_PREFIX "Finished stepping on CPU %u", cpu->cpuno);
+            dap_send_event((dap_event_t){StoppedAtEvent,
+                cpu->cpuno, cpu_get_pc(cpu).ptr, StoppedReasonStep});
+            dap_state = DAP_PAUSED;
         }
     }
 }
@@ -682,7 +686,7 @@ void dap_process(void)
             dap_handle_terminate();
             return;
         case StepRequest:
-            dap_handle_step(request.arg0);
+            dap_handle_step(request.arg0, request.arg1);
             continue;
         case SetCodeBreakpointRequest:
             dap_handle_set_code_breakpoint(request.arg0);
