@@ -410,11 +410,12 @@ static general_cpu_t* get_cpu_or_respond_error(const uint64_t cpu_id)
 
 /* Simulator events */
 
-void dap_event_hit_code_breakpoint(const uint64_t address)
+void dap_event_hit_code_breakpoint(const unsigned int cpu_no)
 {
+    const uint64_t address = cpu_get_pc(get_cpu(cpu_no)).ptr;
     alert(DAP_PREFIX "Hit code breakpoint at address %#0" PRIx64 ", stopping", address);
     dap_state = DAP_PAUSED; // Can't hit BP while paused, so we must have been running
-    dap_send_event((dap_event_t){StoppedAtEvent, address, StoppedReasonBreakpoint, 0x00});
+    dap_send_event((dap_event_t){StoppedAtEvent, cpu_no, address, StoppedReasonBreakpoint});
 }
 
 /* Handlers */
