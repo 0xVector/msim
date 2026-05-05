@@ -189,5 +189,7 @@ int input_is_terminal(void)
 
 void input_end(void)
 {
-    clear_history();
+    if (input_term) {
+        clear_history();
+    }
 }
