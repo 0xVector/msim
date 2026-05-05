@@ -402,7 +402,7 @@ static general_cpu_t* get_cpu_or_respond_error(const uint64_t cpu_id)
 {
     general_cpu_t* cpu = get_cpu(cpu_id);
     if (cpu == NULL) {
-        alert(DAP_PREFIX "No such CPU with ID %lu!", cpu_id);
+        alert(DAP_PREFIX "No such CPU with ID %" PRIu64 "!", cpu_id);
         dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
     }
     return cpu;
@@ -492,7 +492,7 @@ static void dap_handle_step(const uint64_t cpu_id, const uint64_t count)
     }
 
     cpu->steps_left = count;
-    alert(DAP_PREFIX "Stepping %lu instructions on CPU %lu.", count, cpu_id);
+    alert(DAP_PREFIX "Stepping %" PRIu64 " instructions on CPU %" PRIu64 ".", count, cpu_id);
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
@@ -503,7 +503,7 @@ static void dap_handle_read_register(const uint64_t cpu_id, const uint64_t reg_i
 
     uint64_t reg_value = 0;
     if (!cpu_get_reg(cpu, reg_id, &reg_value)) {
-        alert(DAP_PREFIX "Failed to read general register ID %lu!", reg_id);
+        alert(DAP_PREFIX "Failed to read general register ID %" PRIu64 "!", reg_id);
         dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
         return;
     }
@@ -517,12 +517,12 @@ static void dap_handle_write_register(const uint64_t cpu_id, const uint64_t reg_
     if (cpu == NULL) return;
 
     if (!cpu_set_reg(cpu, reg_id, value)) {
-        alert(DAP_PREFIX "Failed to write general register ID %lu!", reg_id);
+        alert(DAP_PREFIX "Failed to write general register ID %" PRIu64 "!", reg_id);
         dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
         return;
     }
 
-    alert(DAP_PREFIX "Received WriteGeneralRegisterRequest for register ID %lu with value %#0" PRIx64, reg_id, value);
+    alert(DAP_PREFIX "Received WriteGeneralRegisterRequest for register ID %" PRIu64 " with value %#0" PRIx64, reg_id, value);
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
@@ -552,7 +552,7 @@ static void dap_handle_write_csr(const uint64_t cpu_id, const uint64_t reg_id, c
         return;
     }
 
-    alert(DAP_PREFIX "Received WriteGeneralRegisterRequest for register ID %lu with value %#0" PRIx64, reg_id, value);
+    alert(DAP_PREFIX "Received WriteGeneralRegisterRequest for register ID %" PRIu64 " with value %#0" PRIx64, reg_id, value);
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
@@ -626,13 +626,13 @@ static void dap_handle_get_config(void)
         ++cpu_count;
     }
 
-    alert(DAP_PREFIX "Received GetConfigRequest, reporting %lu CPUs.", cpu_count);
+    alert(DAP_PREFIX "Received GetConfigRequest, reporting %" PRIu64 " CPUs.", cpu_count);
     dap_send_response((dap_response_t){ StatusOk, cpu_count, 0x00, 0x00});
 }
 
 static void dap_handle_get_cpu_info(const uint64_t cpu_id)
 {
-    alert(DAP_PREFIX "Received GetCpuInfoRequest for CPU ID %lu", cpu_id);
+    alert(DAP_PREFIX "Received GetCpuInfoRequest for CPU ID %" PRIu64 "", cpu_id);
     general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
     if (cpu == NULL) return;
 
@@ -648,7 +648,7 @@ static void dap_handle_get_cpu_info(const uint64_t cpu_id)
         arch_val = 0x03;
         break;
     default:
-        alert(DAP_PREFIX "CPU with ID %lu has unknown architecture %u!", cpu_id, cpu->type->arch);
+        alert(DAP_PREFIX "CPU with ID %" PRIu64 " has unknown architecture %u!", cpu_id, cpu->type->arch);
         arch_val = 0xFF;
     }
 
