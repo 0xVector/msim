@@ -26,8 +26,6 @@ static int connection_fd = -1;
 static uint32_t cpuno_default = 0; // Default CPU device number used
 
 typedef enum dap_request_type {
-    // TODO: update comments to reflect the actual state of the protocol
-
     /** Request to resume execution. Also used for the initial start. */
     ResumeRequest = 0x01,
     /** Request to pause execution. */
@@ -403,7 +401,7 @@ static general_cpu_t* get_cpu_or_respond_error(const uint64_t cpu_id)
     general_cpu_t* cpu = get_cpu(cpu_id);
     if (cpu == NULL) {
         alert(DAP_PREFIX "No such CPU with ID %" PRIu64 "!", cpu_id);
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00});
     }
     return cpu;
 }
@@ -485,7 +483,7 @@ static void dap_handle_remove_code_breakpoint(const uint64_t addr)
     }
 
     alert(DAP_PREFIX "No such breakpoint!");
-    dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+    dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00});
 }
 
 static void dap_handle_step(const uint64_t cpu_id, const uint64_t count)
@@ -506,7 +504,7 @@ static void dap_handle_read_register(const uint64_t cpu_id, const uint64_t reg_i
     uint64_t reg_value = 0;
     if (!cpu_get_reg(cpu, reg_id, &reg_value)) {
         alert(DAP_PREFIX "Failed to read general register ID %" PRIu64 "!", reg_id);
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00});
         return;
     }
 
@@ -520,7 +518,7 @@ static void dap_handle_write_register(const uint64_t cpu_id, const uint64_t reg_
 
     if (!cpu_set_reg(cpu, reg_id, value)) {
         alert(DAP_PREFIX "Failed to write general register ID %" PRIu64 "!", reg_id);
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00});
         return;
     }
 
@@ -536,7 +534,7 @@ static void dap_handle_read_csr(const uint64_t cpu_id, const uint64_t reg_id)
     uint64_t reg_value = 0;
     if (!cpu_get_csr(cpu, reg_id, &reg_value)) {
         alert(DAP_PREFIX "Failed to read CSR %#0" PRIx64 "!", reg_id);
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00});
         return;
     }
 
@@ -550,7 +548,7 @@ static void dap_handle_write_csr(const uint64_t cpu_id, const uint64_t reg_id, c
 
     if (!cpu_set_csr(cpu, reg_id, value)) {
         alert(DAP_PREFIX "Failed to write CSR %#0" PRIx64 "!", reg_id);
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00});
         return;
     }
 
@@ -599,7 +597,6 @@ static void dap_handle_read_phys_memory(const uint64_t address)
     memcpy(&response.arg1, buffer + 1 * sizeof(uint64_t), sizeof(response.arg1));
     memcpy(&response.arg2, buffer + 2 * sizeof(uint64_t), sizeof(response.arg2));
 
-    // alert(DAP_PREFIX "Received ReadPhysMemoryRequest for address %#0" PRIx64 ", returning data %#0" PRIx64 "%#0" PRIx64 "%#0" PRIx64, address, response.arg0, response.arg1, response.arg2);
     dap_send_response(response);
 }
 
@@ -612,11 +609,10 @@ static void dap_handle_read_virt_memory(const uint64_t cpu_id, const uint64_t ad
     ptr36_t phys_addr = 0;
     if (!cpu_convert_addr(cpu, virt_addr, &phys_addr, false)) {
         alert(DAP_PREFIX "Failed to translate virtual address %#0" PRIx64 "!", address);
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00});
         return;
     }
 
-    // alert(DAP_PREFIX "Received ReadVirtMemoryRequest for virtual address %#0" PRIx64 ", translated to physical address %#0" PRIx64, address, phys_addr);
     dap_handle_read_phys_memory(phys_addr);
 }
 
