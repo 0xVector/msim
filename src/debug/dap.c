@@ -454,12 +454,12 @@ static void dap_handle_terminate(void)
 /** Handle set code breakpoint request */
 static void dap_handle_set_code_breakpoint(const uint64_t addr)
 {
-    const ptr64_t virt_addr = { addr };
-    general_cpu_t* cpu = get_cpu(cpuno_default); // TODO: handle CPUs
+    const ptr64_t virt_addr = { .ptr = addr };
 
-    if (!cpu_insert_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER)) {
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
-        return;
+    general_cpu_t* cpu = NULL;
+    for_each(cpu_list, cpu, general_cpu_t)
+    {
+        cpu_insert_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER);
     }
 
     alert(DAP_PREFIX "Added code breakpoint at address %#0" PRIx64, virt_addr.ptr);
@@ -469,17 +469,23 @@ static void dap_handle_set_code_breakpoint(const uint64_t addr)
 /** Handle remove code breakpoint request */
 static void dap_handle_remove_code_breakpoint(const uint64_t addr)
 {
-    const ptr64_t virt_addr = { addr };
-    general_cpu_t* cpu = get_cpu(cpuno_default); // TODO: handle CPUs
+    const ptr64_t virt_addr = { .ptr = addr };
 
-    if (!cpu_remove_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER)) {
-        alert(DAP_PREFIX "No such breakpoint!");
-        dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
+    bool success = true;
+    general_cpu_t* cpu = NULL;
+    for_each(cpu_list, cpu, general_cpu_t)
+    {
+        success &= cpu_remove_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER);
+    }
+
+    if (success) {
+        alert(DAP_PREFIX "Removed code breakpoint from address %#0" PRIx64, virt_addr.ptr);
+        dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00 , 0x00});
         return;
     }
 
-    alert(DAP_PREFIX "Removed code breakpoint from address %#0" PRIx64, virt_addr.ptr);
-    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00 , 0x00});
+    alert(DAP_PREFIX "No such breakpoint!");
+    dap_send_response((dap_response_t){ StatusUnspecifiedError, 0x00, 0x00, 0x00}); // TODO: more specific err code
 }
 
 static void dap_handle_step(const uint64_t cpu_id, const uint64_t count)
