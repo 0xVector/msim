@@ -10,6 +10,7 @@ adapter.send(StepRequest, cpu, 0).expect_response()
 
 for i in range(1, PROGRAM_LEN + 1):
     adapter.send(StepRequest, cpu, 1).expect_response()
+    adapter.send(ResumeRequest).expect_response()
     adapter.expect_event(StoppedAtEvent, cpu, RST_VEC + i * INSTR_LEN, StoppedReasonStep)
 
 adapter.send(StepRequest, cpu, 0).expect_response()

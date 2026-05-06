@@ -10,6 +10,7 @@ adapter.send(ReadPCRequest, DEFAULT_CPU).expect_response(StatusOk, RST_VEC + INS
 
 # Step once and check that the PC has advanced by another instruction
 adapter.send(StepRequest, DEFAULT_CPU, 1).expect_response(StatusOk)
+adapter.send(ResumeRequest).expect_response()
 adapter.expect_event(StoppedAtEvent, DEFAULT_CPU, RST_VEC + 2 * INSTR_LEN, StoppedReasonStep)
 adapter.send(ReadPCRequest, DEFAULT_CPU).expect_response(StatusOk, RST_VEC + 2 * INSTR_LEN)
 
@@ -23,9 +24,11 @@ rest = PROGRAM_LEN - half
 for _ in range(5):
     # Step through the first half of the program and check that the PC has advanced correctly
     adapter.send(StepRequest, DEFAULT_CPU, half).expect_response(StatusOk)
+    adapter.send(ResumeRequest).expect_response()
     adapter.expect_event(StoppedAtEvent, DEFAULT_CPU, RST_VEC + half * INSTR_LEN, StoppedReasonStep)
     # Step through the rest of the program and check that the PC has advanced correctly
     adapter.send(StepRequest, DEFAULT_CPU, rest).expect_response(StatusOk)
+    adapter.send(ResumeRequest).expect_response()
     adapter.expect_event(StoppedAtEvent, DEFAULT_CPU, RST_VEC + PROGRAM_LEN * INSTR_LEN, StoppedReasonStep)
     # Rollback the PC
     adapter.send(WritePCRequest, DEFAULT_CPU, RST_VEC).expect_response(StatusOk)

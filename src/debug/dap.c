@@ -487,10 +487,6 @@ static void dap_handle_step(const uint64_t cpu_id, const uint64_t count)
     general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
     if (cpu == NULL) return;
 
-    if (count > 0) {
-        dap_state = DAP_RUNNING; // Step implicitly resumes
-    }
-
     cpu->steps_left = count;
     alert(DAP_PREFIX "Stepping %" PRIu64 " instructions on CPU %" PRIu64 ".", count, cpu_id);
     dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
