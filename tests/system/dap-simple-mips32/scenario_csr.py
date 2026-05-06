@@ -18,8 +18,10 @@ for csr in (BADVADDR, ENTRYHI, CAUSE, EPC, CONFIG, LLADDR):
 
 # Step a bit and check that the PC is updated, but registers are unchanged
 adapter.send(StepRequest, DEFAULT_CPU, 2).expect_response(StatusOk)
+adapter.send(ResumeRequest).expect_response()
 adapter.expect_event(StoppedAtEvent, DEFAULT_CPU, RST_VEC_VIRT + 2 * INSTR_LEN, StoppedReasonStep)
 adapter.send(StepRequest, DEFAULT_CPU, 2).expect_response(StatusOk)
+adapter.send(ResumeRequest).expect_response()
 adapter.expect_event(StoppedAtEvent, DEFAULT_CPU, RST_VEC_VIRT + 4 * INSTR_LEN, StoppedReasonStep)
 
 for csr in (BADVADDR, ENTRYHI, CAUSE, EPC, CONFIG, LLADDR):
