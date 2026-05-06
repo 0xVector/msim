@@ -8,21 +8,21 @@ adapter.send(WriteGeneralRegisterRequest, DEFAULT_CPU, 0).expect_response(Status
 adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, 0).expect_response(StatusOk, 0x00)
 
 adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, 1).expect_response(StatusOk, 0x00)  # x1 (ra) is 0 at reset
-adapter.send(WriteGeneralRegisterRequest, DEFAULT_CPU, 1, 0x12345678).expect_response(StatusOk)
-adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, 1).expect_response(StatusOk, 0x12345678)
+adapter.send(WriteGeneralRegisterRequest, DEFAULT_CPU, 1, 0x0123456789abcdef).expect_response(StatusOk)
+adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, 1).expect_response(StatusOk, 0x0123456789abcdef)
 
 # Invalid register index
 for i in range(REG_COUNT, REG_COUNT + 50, 10):
-    adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, REG_COUNT).expect_response(StatusUnspecifiedError)
+    adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, i).expect_response(StatusUnspecifiedError)
 
 # Write and read all registers with a known pattern
 for i in range(1, REG_COUNT):
-    adapter.send(WriteGeneralRegisterRequest, DEFAULT_CPU, i, i * 0x01234567).expect_response(StatusOk)
-    adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, i).expect_response(StatusOk, i * 0x01234567)
+    adapter.send(WriteGeneralRegisterRequest, DEFAULT_CPU, i, i * 0x0123456789abcdef).expect_response(StatusOk)
+    adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, i).expect_response(StatusOk, i * 0x0123456789abcdef)
 
 # Write all registers with a different pattern
 for i in range(1, REG_COUNT):
-    adapter.send(WriteGeneralRegisterRequest, DEFAULT_CPU, i, i * 0x07654321).expect_response(StatusOk)
+    adapter.send(WriteGeneralRegisterRequest, DEFAULT_CPU, i, i * 0x00edcba987654321).expect_response(StatusOk)
 
 # Step a bit and check that the PC is updated, but registers are unchanged
 adapter.send(StepRequest, DEFAULT_CPU, 2).expect_response(StatusOk)
@@ -34,7 +34,7 @@ adapter.expect_event(StoppedAtEvent, DEFAULT_CPU, RST_VEC + 4 * INSTR_LEN, Stopp
 
 # Check that registers still have the same value after stepping
 for i in range(1, REG_COUNT):
-    adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, i).expect_response(StatusOk, i * 0x07654321)
+    adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, i).expect_response(StatusOk, i * 0x00edcba987654321)
 
 adapter.send(TerminateRequest).expect_response().expect_event(TerminatedEvent)
 adapter.close()
