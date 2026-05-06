@@ -121,3 +121,35 @@ load "common"
 @test "DAP MIPS32: Bad request" {
     msim_dap_run "dap-simple-mips32" "scenario_bad_req.py"
 }
+
+@test "DAP Multiarch (RV32+RV64): Terminate" {
+    msim_dap_run "dap-simple-multiarch" "scenario_terminate.py"
+}
+
+@test "DAP Multiarch (RV32+RV64): Step" {
+    msim_dap_run "dap-simple-multiarch" "scenario_step.py"
+}
+
+@test "DAP Multiarch (RV32+RV64): Resume" {
+    msim_dap_run "dap-simple-multiarch" "scenario_resume.py"
+}
+
+@test "DAP Multiarch (RV32+RV64): Breakpoint" {
+    msim_dap_run "dap-simple-multiarch" "scenario_breakpoint.py"
+}
+
+@test "DAP Multiarch (RV32+RV64): Register" {
+    msim_dap_run "dap-simple-multiarch" "scenario_register.py"
+}
+
+@test "DAP Multiarch (RV32+RV64): CSR" {
+    msim_dap_run "dap-simple-multiarch" "scenario_csr.py"
+}
+
+@test "DAP Multiarch (RV32+RV64): PC" {
+    msim_dap_run "dap-simple-multiarch" "scenario_pc.py"
+}
+
+@test "DAP Multiarch (RV32+RV64): CPU info" {
+    msim_dap_run "dap-simple-multiarch" "scenario_cpu_info.py"
+}
