@@ -36,6 +36,10 @@ EventCategory = 0x02
 StatusOk = 0x01
 StatusUnspecifiedError = 0x02
 StatusUnsupportedRequestError = 0x03
+StatusCpuNotFoundError = 0x04
+StatusBreakpointNotFoundError = 0x05
+StatusRegisterNotFoundError = 0x06
+StatusBadAddressError = 0x07
 
 # Event types
 TerminatedEvent = 0x01

@@ -10,8 +10,8 @@ adapter.send(ReadGeneralRegisterRequest, arg0=CPU1, arg1=1).expect_response(Stat
 
 # Invalid register index
 for i in (REG_COUNT, REG_COUNT + 4546, REG_COUNT + 144104):
-    adapter.send(ReadGeneralRegisterRequest, CPU0, REG_COUNT).expect_response(StatusUnspecifiedError)
-    adapter.send(ReadGeneralRegisterRequest, CPU1, REG_COUNT).expect_response(StatusUnspecifiedError)
+    adapter.send(ReadGeneralRegisterRequest, CPU0, i).expect_response(StatusRegisterNotFoundError, arg0=i)
+    adapter.send(ReadGeneralRegisterRequest, CPU1, i).expect_response(StatusRegisterNotFoundError, arg0=i)
 
 # Write and read all registers with a known pattern
 for i in range(1, REG_COUNT):

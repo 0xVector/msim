@@ -7,7 +7,8 @@ adapter.send(SetCodeBreakpointRequest, RST_VEC + 7 * INSTR_LEN).expect_response(
 adapter.send(SetCodeBreakpointRequest, RST_VEC + 8 * INSTR_LEN).expect_response()
 
 # Remove a non-existent breakpoint
-adapter.send(RemoveCodeBreakpointRequest, RST_VEC + 6 * INSTR_LEN).expect_response(StatusUnspecifiedError)
+adapter.send(RemoveCodeBreakpointRequest, RST_VEC + 6 * INSTR_LEN).expect_response(StatusBreakpointNotFoundError,
+                                                                                   arg0=RST_VEC + 6 * INSTR_LEN)
 
 adapter.send(SetCodeBreakpointRequest, RST_VEC + 3 * INSTR_LEN).expect_response()
 adapter.send(ResumeRequest).expect_response()

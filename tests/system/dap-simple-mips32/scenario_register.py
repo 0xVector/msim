@@ -13,7 +13,7 @@ adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, 1).expect_response(StatusO
 
 # Invalid register index
 for i in range(REG_COUNT, REG_COUNT + 50, 10):
-    adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, i).expect_response(StatusUnspecifiedError)
+    adapter.send(ReadGeneralRegisterRequest, DEFAULT_CPU, i).expect_response(StatusRegisterNotFoundError, arg0=i)
 
 # Write and read all registers with a known pattern
 for i in range(1, REG_COUNT):
