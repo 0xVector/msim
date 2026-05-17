@@ -1,15 +1,15 @@
 from base import *
 
-adapter = Adapter(int(sys.argv[1]))
+adp = Adapter(int(sys.argv[1]))
 
-adapter.send(ReadPCRequest, DEFAULT_CPU).expect_response(StatusOk, arg0=RST_VEC_VIRT)
+adp.send(ReadPCRequest, arg0=DEFAULT_CPU).expect_response(StatusOk, arg0=at(0))
 # Make sure its actually stopped and not running yet
-adapter.send(ReadPCRequest, DEFAULT_CPU).expect_response(StatusOk, arg0=RST_VEC_VIRT)
-adapter.send(PauseRequest).expect_response(StatusOk)
+adp.send(ReadPCRequest, arg0=DEFAULT_CPU).expect_response(StatusOk, arg0=at(0))
+adp.send(PauseRequest).expect_response(StatusOk)
 # We don't expect a StoppedAtEvent here, because the CPU is already stopped and shouldn't generate a new event
-adapter.send(ReadPCRequest, DEFAULT_CPU).expect_response(StatusOk, arg0=RST_VEC_VIRT)
+adp.send(ReadPCRequest, arg0=DEFAULT_CPU).expect_response(StatusOk, arg0=at(0))
 
-adapter.send(ResumeRequest).expect_response(StatusOk)
+adp.send(ResumeRequest).expect_response(StatusOk)
 
-adapter.expect_event(TerminatedEvent)
-adapter.close()
+adp.expect_event(TerminatedEvent)
+adp.close()

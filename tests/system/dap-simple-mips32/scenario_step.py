@@ -1,21 +1,20 @@
 from base import *
 
-adapter = Adapter(int(sys.argv[1]))
-
-cpu = DEFAULT_CPU
+adp = Adapter(int(sys.argv[1]))
 
 # Step with count 0 should clear the stepping state, but not resume execution
-adapter.send(StepRequest, cpu, 0).expect_response()
-adapter.send(StepRequest, cpu, 0).expect_response()
+adp.send(StepRequest, arg0=DEFAULT_CPU, arg1=0).expect_response()
+adp.send(StepRequest, arg0=DEFAULT_CPU, arg1=0).expect_response()
 
+# Step through the program one instruction at a time and check that we stop at the right place
 for i in range(1, PROGRAM_LEN + 1):
-    adapter.send(StepRequest, cpu, 1).expect_response()
-    adapter.send(ResumeRequest).expect_response()
-    adapter.expect_event(StoppedAtEvent, cpu, RST_VEC_VIRT + i * INSTR_LEN, StoppedReasonStep)
+    adp.send(StepRequest, arg0=DEFAULT_CPU, arg1=1).expect_response()
+    adp.send(ResumeRequest).expect_response()
+    adp.expect_event(StoppedAtEvent, arg0=DEFAULT_CPU, arg1=at(i), arg2=StoppedReasonStep)
 
-adapter.send(StepRequest, cpu, 0).expect_response()
+adp.send(StepRequest, arg0=DEFAULT_CPU, arg1=0).expect_response()
 
 # Resume to consume the halt instruction and terminate
-adapter.send(ResumeRequest).expect_response(StatusOk)
-adapter.expect_event(TerminatedEvent)
-adapter.close()
+adp.send(ResumeRequest).expect_response(StatusOk)
+adp.expect_event(TerminatedEvent)
+adp.close()

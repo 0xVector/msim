@@ -1,28 +1,27 @@
 from base import *
 
-adapter = Adapter(int(sys.argv[1]))
+adp = Adapter(int(sys.argv[1]))
 
 # Set breakpoints at the end, we will remove later
-adapter.send(SetCodeBreakpointRequest, RST_VEC + 7 * INSTR_LEN).expect_response()
-adapter.send(SetCodeBreakpointRequest, RST_VEC + 8 * INSTR_LEN).expect_response()
+adp.send(SetCodeBreakpointRequest, arg0=at(7)).expect_response()
+adp.send(SetCodeBreakpointRequest, arg0=at(8)).expect_response()
 
 # Remove a non-existent breakpoint
-adapter.send(RemoveCodeBreakpointRequest, RST_VEC + 6 * INSTR_LEN).expect_response(StatusBreakpointNotFoundError,
-                                                                                   arg0=RST_VEC + 6 * INSTR_LEN)
+adp.send(RemoveCodeBreakpointRequest, arg0=at(6)).expect_response(StatusBreakpointNotFoundError, arg0=at(6))
 
-adapter.send(SetCodeBreakpointRequest, RST_VEC + 3 * INSTR_LEN).expect_response()
-adapter.send(ResumeRequest).expect_response()
-adapter.expect_event(StoppedAtEvent, DEFAULT_CPU, RST_VEC + 3 * INSTR_LEN, StoppedReasonBreakpoint, )
+adp.send(SetCodeBreakpointRequest, arg0=at(3)).expect_response()
+adp.send(ResumeRequest).expect_response()
+adp.expect_event(StoppedAtEvent, arg0=DEFAULT_CPU, arg1=at(3), arg2=StoppedReasonBreakpoint)
 
-adapter.send(SetCodeBreakpointRequest, RST_VEC).expect_response()  # BP should not be hit
+adp.send(SetCodeBreakpointRequest, arg0=at(0)).expect_response()  # BP should not be hit
 
-adapter.send(SetCodeBreakpointRequest, RST_VEC + 5 * INSTR_LEN).expect_response()
-adapter.send(ResumeRequest).expect_response()
-adapter.expect_event(StoppedAtEvent, DEFAULT_CPU, RST_VEC + 5 * INSTR_LEN, StoppedReasonBreakpoint, )
+adp.send(SetCodeBreakpointRequest, arg0=at(5)).expect_response()
+adp.send(ResumeRequest).expect_response()
+adp.expect_event(StoppedAtEvent, arg0=DEFAULT_CPU, arg1=at(5), arg2=StoppedReasonBreakpoint)
 
 # Remove the breakpoints we set at the start, should not get hit
-adapter.send(RemoveCodeBreakpointRequest, RST_VEC + 7 * INSTR_LEN).expect_response()
-adapter.send(RemoveCodeBreakpointRequest, RST_VEC + 8 * INSTR_LEN).expect_response()
+adp.send(RemoveCodeBreakpointRequest, arg0=at(7)).expect_response()
+adp.send(RemoveCodeBreakpointRequest, arg0=at(8)).expect_response()
 
-adapter.send(ResumeRequest).expect_response().expect_event(TerminatedEvent)
-adapter.close()
+adp.send(ResumeRequest).expect_response().expect_event(TerminatedEvent)
+adp.close()

@@ -54,7 +54,7 @@ StoppedReasonInterrupt = 0x04
 class Adapter:
     def __init__(self, port):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.settimeout(5)
+        self.sock.settimeout(.5)
         self.sock.connect(("127.0.0.1", port))
 
     def send(self, req_type, arg0=0x00, arg1=0x00, arg2=0x00):
@@ -95,3 +95,9 @@ class Adapter:
         assert a1 == arg1, f"Got event arg1 {hex(a1)}, but expected {hex(arg1)}"
         assert a2 == arg2, f"Got event arg2 {hex(a2)}, but expected {hex(arg2)}"
         return self
+
+def make_at(reset_vector, instr_len):
+    """ Compute the address of the nth instruction in the test program """
+    def at(instruction_number):
+        return reset_vector + instruction_number * instr_len
+    return at

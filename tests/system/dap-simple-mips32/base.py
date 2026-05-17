@@ -19,3 +19,8 @@ REG_COUNT = 32  # Number of general-purpose registers in RISC-V
 NOP_INSTR = 0x00000000  # NOP instruction in MIPS32 (sll $zero, $zero, 0)
 
 DEFAULT_CPU = 0  # Default CPU used in DAP
+
+at = make_at(RST_VEC_VIRT, INSTR_LEN)
+"""get virtual address by instruction number"""
+
+at_phys = make_at(RST_VEC_PHYS, INSTR_LEN)

@@ -1,6 +1,6 @@
 from base import *
 
-adapter = Adapter(int(sys.argv[1]))
+adp = Adapter(int(sys.argv[1]))
 
-adapter.send(TerminateRequest).expect_response().expect_event(TerminatedEvent)
-adapter.close()
+adp.send(TerminateRequest).expect_response().expect_event(TerminatedEvent)
+adp.close()

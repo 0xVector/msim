@@ -1,29 +1,29 @@
 from base import *
 
-adapter = Adapter(int(sys.argv[1]))
+adp = Adapter(int(sys.argv[1]))
 
 # Advance the PC by one instruction and check that it has advanced correctly only for CPU0, not CPU1
-adapter.send(WritePCRequest, CPU0, RST_VEC + INSTR_LEN).expect_response(StatusOk)
-adapter.send(ReadPCRequest, CPU0).expect_response(StatusOk, RST_VEC + INSTR_LEN)
-adapter.send(ReadPCRequest, CPU1).expect_response(StatusOk, RST_VEC)
+adp.send(WritePCRequest, arg0=CPU0, arg1=at(1)).expect_response(StatusOk)
+adp.send(ReadPCRequest, arg0=CPU0).expect_response(StatusOk, arg0=at(1))
+adp.send(ReadPCRequest, arg0=CPU1).expect_response(StatusOk, arg0=at(0))
 
 # Step once CPU1
-adapter.send(StepRequest, CPU1, 4).expect_response(StatusOk)
-adapter.send(ResumeRequest).expect_response()
-adapter.expect_event(StoppedAtEvent, CPU1, RST_VEC + 4 * INSTR_LEN, StoppedReasonStep)
-adapter.send(ReadPCRequest, CPU0).expect_response(StatusOk, RST_VEC + 5 * INSTR_LEN)
-adapter.send(ReadPCRequest, CPU1).expect_response(StatusOk, RST_VEC + 4 * INSTR_LEN)
+adp.send(StepRequest, arg0=CPU1, arg1=4).expect_response(StatusOk)
+adp.send(ResumeRequest).expect_response()
+adp.expect_event(StoppedAtEvent, arg0=CPU1, arg1=at(4), arg2=StoppedReasonStep)
+adp.send(ReadPCRequest, arg0=CPU0).expect_response(StatusOk, arg0=at(5))
+adp.send(ReadPCRequest, arg0=CPU1).expect_response(StatusOk, arg0=at(4))
 
 # Rollback the PC
-adapter.send(WritePCRequest, CPU0, RST_VEC).expect_response(StatusOk)
-adapter.send(WritePCRequest, CPU1, RST_VEC + 2 * INSTR_LEN).expect_response(StatusOk)
+adp.send(WritePCRequest, arg0=CPU0, arg1=at(0)).expect_response(StatusOk)
+adp.send(WritePCRequest, arg0=CPU1, arg1=at(2)).expect_response(StatusOk)
 
-#
-adapter.send(StepRequest, CPU0, 2).expect_response(StatusOk)
-adapter.send(ResumeRequest).expect_response()
-adapter.expect_event(StoppedAtEvent, CPU0, RST_VEC + 2 * INSTR_LEN, StoppedReasonStep)
-adapter.send(ReadPCRequest, CPU0).expect_response(StatusOk, RST_VEC + 2 * INSTR_LEN)
-adapter.send(ReadPCRequest, CPU1).expect_response(StatusOk, RST_VEC + 4 * INSTR_LEN)
+# Step once CPU0
+adp.send(StepRequest, arg0=CPU0, arg1=2).expect_response(StatusOk)
+adp.send(ResumeRequest).expect_response()
+adp.expect_event(StoppedAtEvent, arg0=CPU0, arg1=at(2), arg2=StoppedReasonStep)
+adp.send(ReadPCRequest, arg0=CPU0).expect_response(StatusOk, arg0=at(2))
+adp.send(ReadPCRequest, arg0=CPU1).expect_response(StatusOk, arg0=at(4))
 
-adapter.send(TerminateRequest).expect_response().expect_event(TerminatedEvent)
-adapter.close()
+adp.send(TerminateRequest).expect_response().expect_event(TerminatedEvent)
+adp.close()

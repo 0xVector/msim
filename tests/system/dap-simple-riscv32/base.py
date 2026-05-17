@@ -18,3 +18,5 @@ REG_COUNT = 32  # Number of general-purpose registers in RISC-V
 NOP_INSTR = 0x00000013  # NOP instruction in RISC-V (ADDI x0, x0, 0)
 
 DEFAULT_CPU = 0  # Default CPU used in DAP
+
+at = make_at(RST_VEC, INSTR_LEN)
