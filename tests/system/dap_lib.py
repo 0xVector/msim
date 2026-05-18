@@ -37,9 +37,8 @@ StatusOk = 0x01
 StatusUnspecifiedError = 0x02
 StatusUnsupportedRequestError = 0x03
 StatusCpuNotFoundError = 0x04
-StatusBreakpointNotFoundError = 0x05
-StatusRegisterNotFoundError = 0x06
-StatusBadAddressError = 0x07
+StatusRegisterNotFoundError = 0x05
+StatusBadAddressError = 0x06
 
 # Event types
 TerminatedEvent = 0x01

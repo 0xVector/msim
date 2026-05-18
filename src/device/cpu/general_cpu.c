@@ -128,14 +128,12 @@ bool cpu_insert_breakpoint(general_cpu_t *cpu, const ptr64_t addr, const breakpo
     if (existing == NULL) {
         breakpoint_t* bp = breakpoint_init(normalized_addr, kind);
         list_append(&cpu->bps, &bp->item);
-        return true;
     }
-
     // Only report error for simulator breakpoints, debuggers are left to handle it as they want
-    if (kind == BREAKPOINT_KIND_SIMULATOR) {
+    else if (kind == BREAKPOINT_KIND_SIMULATOR) {
         error("Breakpoint already exists");
     }
-    return false;
+    return true;
 }
 
 bool cpu_remove_breakpoint(general_cpu_t *cpu, const ptr64_t addr, const breakpoint_kind_t kind)
@@ -156,14 +154,12 @@ bool cpu_remove_breakpoint(general_cpu_t *cpu, const ptr64_t addr, const breakpo
     if (remove != NULL) {
         list_remove(&cpu->bps, &remove->item);
         safe_free(remove);
-        return true;
     }
-
     // Only report error for simulator breakpoints, debuggers are left to handle it as they want
-    if (kind == BREAKPOINT_KIND_SIMULATOR) {
+    else if (kind == BREAKPOINT_KIND_SIMULATOR) {
         error("Unknown breakpoint");
     }
-    return false;
+    return true;
 }
 
 /**

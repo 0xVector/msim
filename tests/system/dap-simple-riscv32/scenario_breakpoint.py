@@ -7,7 +7,7 @@ adp.send(SetCodeBreakpointRequest, arg0=at(7)).expect_response()
 adp.send(SetCodeBreakpointRequest, arg0=at(8)).expect_response()
 
 # Remove a non-existent breakpoint
-adp.send(RemoveCodeBreakpointRequest, arg0=at(6)).expect_response(StatusBreakpointNotFoundError, arg0=at(6))
+adp.send(RemoveCodeBreakpointRequest, arg0=at(6)).expect_response()
 
 # Set a breakpoint, run the program, and check that we stop at the right place
 adp.send(SetCodeBreakpointRequest, arg0=at(3)).expect_response()

@@ -104,12 +104,10 @@ typedef enum dap_response_status {
     StatusUnsupportedRequestError = 0x03,
     /** Response to a failed request with an unknown CPU id `arg0`. */
     StatusCpuNotFoundError = 0x04,
-    /** Response to a failed request with an unknown breakpoint at address `arg0`. */
-    StatusBreakpointNotFoundError = 0x05,
     /** Response to a failed request with an unknown register id `arg0`. */
-    StatusRegisterNotFoundError = 0x06,
+    StatusRegisterNotFoundError = 0x05,
     /** Response to a failed request with bad memory address `arg0`. */
-    StatusBadAddressError = 0x07,
+    StatusBadAddressError = 0x06,
 } dap_response_status_t;
 
 typedef enum dap_event_type {
@@ -463,13 +461,19 @@ static void dap_handle_set_code_breakpoint(const uint64_t addr)
     const ptr64_t virt_addr = { .ptr = addr };
 
     general_cpu_t* cpu = NULL;
+    uint32_t set_cpus = 0;
     for_each(cpu_list, cpu, general_cpu_t)
     {
-        cpu_insert_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER);
+        set_cpus += cpu_insert_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER) ? 1 : 0;
     }
 
-    alert(DAP_PREFIX "Added code breakpoint at address %#0" PRIx64, virt_addr.ptr);
-    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+    if (set_cpus > 0) {
+        alert(DAP_PREFIX "Added code breakpoint at address %#0" PRIx64, virt_addr.ptr);
+        dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+    } else {
+        alert(DAP_PREFIX "Error setting breakpoint at address %#0" PRIx64 ": no such address in any CPU!", virt_addr.ptr);
+        dap_send_response((dap_response_t){ StatusBadAddressError, addr, 0x00, 0x00});
+    }
 }
 
 /** Handle remove code breakpoint request */
@@ -477,21 +481,20 @@ static void dap_handle_remove_code_breakpoint(const uint64_t addr)
 {
     const ptr64_t virt_addr = { .ptr = addr };
 
-    bool success = true;
     general_cpu_t* cpu = NULL;
+    uint32_t removed_cpus = 0;
     for_each(cpu_list, cpu, general_cpu_t)
     {
-        success &= cpu_remove_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER);
+        removed_cpus += cpu_remove_breakpoint(cpu, virt_addr, BREAKPOINT_KIND_DEBUGGER) ? 1 : 0;
     }
 
-    if (success) {
-        alert(DAP_PREFIX "Removed code breakpoint from address %#0" PRIx64, virt_addr.ptr);
-        dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00 , 0x00});
-        return;
+    if (removed_cpus > 0) {
+        alert(DAP_PREFIX "Removed code breakpoint at address %#0" PRIx64, virt_addr.ptr);
+        dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+    } else {
+        alert(DAP_PREFIX "Error removing breakpoint at address %#0" PRIx64 ": no such address in any CPU!", virt_addr.ptr);
+        dap_send_response((dap_response_t){ StatusBadAddressError, addr, 0x00, 0x00});
     }
-
-    alert(DAP_PREFIX "No such breakpoint!");
-    dap_send_response((dap_response_t){ StatusBreakpointNotFoundError, addr, 0x00, 0x00});
 }
 
 static void dap_handle_step(const uint64_t cpu_id, const uint64_t count)
