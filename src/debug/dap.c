@@ -41,9 +41,9 @@ typedef enum dap_request_type {
     /** Request to remove a code breakpoint at `arg0=address`. */
     RemoveCodeBreakpointRequest = 0x06,
 
-    /** Request to set a data breakpoint at `arg0=address` with `arg1=kind`. */
+    /** Request to set a physical memory data breakpoint at `arg0=address` with `arg1=kind` of `arg2=size`. */
     SetDataBreakpointRequest = 0x07,
-    /** Request to remove a data breakpoint at `arg0=address`. */
+    /** Request to remove a physical memory data breakpoint at `arg0=address`. */
     RemoveDataBreakpointRequest = 0x08,
 
     // Register requests
@@ -412,6 +412,17 @@ static general_cpu_t* get_cpu_or_respond_error(const uint64_t cpu_id)
     return cpu;
 }
 
+static bool dap_validate_phys_addr_or_respond_error(const uint64_t address, ptr36_t* out_phys_addr)
+{
+    // Physical addresses are at most 36 bits
+    if (address & ~(uint64_t)0xfffffffff) {
+        dap_send_response((dap_response_t){ StatusBadAddressError, address, 0x00, 0x00});
+        return false;
+    }
+    *out_phys_addr = (ptr36_t)address;
+    return true;
+}
+
 /* Simulator events */
 
 void dap_event_hit_code_breakpoint(const unsigned int cpu_no)
@@ -420,6 +431,14 @@ void dap_event_hit_code_breakpoint(const unsigned int cpu_no)
     alert(DAP_PREFIX "Hit code breakpoint at address %#0" PRIx64 ", stopping", address);
     dap_state = DAP_PAUSED; // Can't hit BP while paused, so we must have been running
     dap_send_event((dap_event_t){StoppedAtEvent, cpu_no, address, StoppedReasonBreakpoint});
+}
+
+void dap_event_hit_data_breakpoint(const uint64_t address)
+{
+    alert(DAP_PREFIX "Hit data breakpoint at address %#0" PRIx64 ", stopping", address);
+    dap_state = DAP_PAUSED; // Can't hit BP while paused, so we must have been running
+    // No way to know which CPU caused the data breakpoint, so we use the default one
+    dap_send_event((dap_event_t){StoppedAtEvent, cpuno_default, address, StoppedReasonBreakpoint});
 }
 
 /* Handlers */
@@ -495,6 +514,37 @@ static void dap_handle_remove_code_breakpoint(const uint64_t addr)
         alert(DAP_PREFIX "Error removing breakpoint at address %#0" PRIx64 ": no such address in any CPU!", virt_addr.ptr);
         dap_send_response((dap_response_t){ StatusBadAddressError, addr, 0x00, 0x00});
     }
+}
+
+static void dap_handle_set_data_breakpoint(const uint64_t addr, const uint64_t kind, const uint64_t size)
+{
+    ptr36_t phys_addr = 0;
+    if (!dap_validate_phys_addr_or_respond_error(addr, &phys_addr)) {
+        return;
+    }
+
+    const access_filter_t bp_kind = kind;
+    if (bp_kind != ACCESS_FILTER_READ && bp_kind != ACCESS_FILTER_WRITE && bp_kind != ACCESS_FILTER_ANY) {
+        alert(DAP_PREFIX "Invalid data breakpoint kind %#0" PRIx64 "!", kind);
+        dap_send_response((dap_response_t){ StatusUnspecifiedError, kind, 0x00, 0x00});
+        return;
+    }
+
+    physmem_breakpoint_add(phys_addr, size, BREAKPOINT_KIND_DEBUGGER, bp_kind);
+    alert(DAP_PREFIX "Added data breakpoint at physical address %#0"PRIx64 "of type %" PRIu64 " and size %" PRIu64, phys_addr, kind, size);
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+}
+
+static void dap_handle_remove_data_breakpoint(const uint64_t addr)
+{
+    ptr36_t phys_addr = 0;
+    if (!dap_validate_phys_addr_or_respond_error(addr, &phys_addr)) {
+        return;
+    }
+
+    physmem_breakpoint_remove(phys_addr);
+    alert(DAP_PREFIX "Removed data breakpoint at physical address %#0"PRIx64, phys_addr);
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
 static void dap_handle_step(const uint64_t cpu_id, const uint64_t count)
@@ -590,12 +640,10 @@ static void dap_handle_write_pc(const uint64_t cpu_id, const uint64_t value)
 
 static void dap_handle_read_phys_memory(const uint64_t address)
 {
-    // Physical addresses are at most 36 bits
-    if (address & ~(uint64_t)0xfffffffff) {
-        dap_send_response((dap_response_t){ StatusBadAddressError, address, 0x00, 0x00});
+    ptr36_t phys_addr = 0;
+    if (!dap_validate_phys_addr_or_respond_error(address, &phys_addr)) {
         return;
     }
-    const ptr36_t phys_addr = address;
 
     // Read by uint8 to not have to worry about alignment
     uint8_t buffer[DAP_ARG_COUNT * sizeof(uint64_t)] = { 0 };
@@ -705,6 +753,12 @@ void dap_process(void)
             continue;
         case RemoveCodeBreakpointRequest:
             dap_handle_remove_code_breakpoint(request.arg0);
+            continue;
+        case SetDataBreakpointRequest:
+            dap_handle_set_data_breakpoint(request.arg0, request.arg1, request.arg2);
+            continue;
+        case RemoveDataBreakpointRequest:
+            dap_handle_remove_data_breakpoint(request.arg0);
             continue;
         case ReadGeneralRegisterRequest:
             dap_handle_read_register(request.arg0, request.arg1);

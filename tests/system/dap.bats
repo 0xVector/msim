@@ -14,8 +14,12 @@ load "common"
     msim_dap_run "dap-simple-riscv32" "scenario_resume.py"
 }
 
-@test "DAP RISC-V32: Breakpoint" {
+@test "DAP RISC-V32: Code Breakpoint" {
     msim_dap_run "dap-simple-riscv32" "scenario_breakpoint.py"
+}
+
+@test "DAP RISC-V32: Data Breakpoint" {
+    msim_dap_run "dap-simple-riscv32" "scenario_data_breakpoint.py"
 }
 
 @test "DAP RISC-V32: Register" {
@@ -54,8 +58,12 @@ load "common"
     msim_dap_run "dap-simple-riscv64" "scenario_resume.py"
 }
 
-@test "DAP RISC-V64: Breakpoint" {
+@test "DAP RISC-V64: Code Breakpoint" {
     msim_dap_run "dap-simple-riscv64" "scenario_breakpoint.py"
+}
+
+@test "DAP RISC-V64: Data Breakpoint" {
+    msim_dap_run "dap-simple-riscv64" "scenario_data_breakpoint.py"
 }
 
 @test "DAP RISC-V64: Register" {
@@ -94,8 +102,12 @@ load "common"
     msim_dap_run "dap-simple-mips32" "scenario_resume.py"
 }
 
-@test "DAP MIPS32: Breakpoint" {
+@test "DAP MIPS32: Code Breakpoint" {
     msim_dap_run "dap-simple-mips32" "scenario_breakpoint.py"
+}
+
+@test "DAP MIPS32: Data Breakpoint" {
+    msim_dap_run "dap-simple-mips32" "scenario_data_breakpoint.py"
 }
 
 @test "DAP MIPS32: Register" {
@@ -134,8 +146,12 @@ load "common"
     msim_dap_run "dap-simple-multiarch" "scenario_resume.py"
 }
 
-@test "DAP Multiarch (RV32+RV64): Breakpoint" {
+@test "DAP Multiarch (RV32+RV64): Code Breakpoint" {
     msim_dap_run "dap-simple-multiarch" "scenario_breakpoint.py"
+}
+
+@test "DAP Multiarch (RV32+RV64): Data Breakpoint" {
+    msim_dap_run "dap-simple-multiarch" "scenario_data_breakpoint.py"
 }
 
 @test "DAP Multiarch (RV32+RV64): Register" {

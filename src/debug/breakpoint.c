@@ -185,7 +185,11 @@ void physmem_breakpoint_hit(physmem_breakpoint_t *breakpoint,
         machine_interactive = true;
         break;
     case BREAKPOINT_KIND_DEBUGGER:
-        gdb_handle_event(GDB_EVENT_BREAKPOINT);
+        if (dap_enabled) {
+            dap_event_hit_data_breakpoint(breakpoint->addr);
+        } else if (remote_gdb) {
+            gdb_handle_event(GDB_EVENT_BREAKPOINT);
+        }
         break;
     default:
         die(ERR_INTERN, "Unexpected physical memory breakpoint kind");
