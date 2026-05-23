@@ -38,8 +38,8 @@ load "common"
     msim_dap_run "dap-simple-riscv32" "scenario_cpu_info.py"
 }
 
-@test "DAP RISC-V32: Physical memory" {
-    msim_dap_run "dap-simple-riscv32" "scenario_physmem.py"
+@test "DAP RISC-V32: Memory read / write" {
+    msim_dap_run "dap-simple-riscv32" "scenario_mem.py"
 }
 
 @test "DAP RISC-V32: Bad request" {
@@ -82,8 +82,8 @@ load "common"
     msim_dap_run "dap-simple-riscv64" "scenario_cpu_info.py"
 }
 
-@test "DAP RISC-V64: Physical memory" {
-    msim_dap_run "dap-simple-riscv64" "scenario_physmem.py"
+@test "DAP RISC-V64: Memory read / write" {
+    msim_dap_run "dap-simple-riscv64" "scenario_mem.py"
 }
 
 @test "DAP RISC-V64: Bad request" {
@@ -126,8 +126,8 @@ load "common"
     msim_dap_run "dap-simple-mips32" "scenario_cpu_info.py"
 }
 
-@test "DAP MIPS32: Physical memory" {
-    msim_dap_run "dap-simple-mips32" "scenario_physmem.py"
+@test "DAP MIPS32: Memory read / write" {
+    msim_dap_run "dap-simple-mips32" "scenario_mem.py"
 }
 
 @test "DAP MIPS32: Bad request" {

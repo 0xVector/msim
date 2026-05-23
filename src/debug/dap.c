@@ -656,8 +656,29 @@ static void dap_handle_read_phys_memory(const uint64_t address)
     memcpy(&response.arg1, buffer + 1 * sizeof(uint64_t), sizeof(response.arg1));
     memcpy(&response.arg2, buffer + 2 * sizeof(uint64_t), sizeof(response.arg2));
 
-    // alert(DAP_PREFIX "Received ReadPhysMemoryRequest for address %#0" PRIx64 ", returning data %#0" PRIx64 "%#0" PRIx64 "%#0" PRIx64, address, response.arg0, response.arg1, response.arg2);
     dap_send_response(response);
+}
+
+static void dap_handle_write_phys_memory(const uint64_t address, const uint64_t value)
+{
+    ptr36_t phys_addr = 0;
+    if (!dap_validate_phys_addr_or_respond_error(address, &phys_addr)) {
+        return;
+    }
+
+    // Write by uint8 to not have to worry about alignment
+    uint8_t buffer[sizeof(uint64_t)] = { 0 };
+    memcpy(buffer, &value, sizeof(value));
+    for (size_t i = 0; i < sizeof(buffer); ++i) {
+        const bool success = physmem_write8(-1, phys_addr + i, buffer[i], false);
+        if (!success) {
+            alert(DAP_PREFIX "Failed to write to physical address %#0" PRIx64 "!", phys_addr + i);
+            dap_send_response((dap_response_t){ StatusBadAddressError, address, 0x00, 0x00});
+            return;
+        }
+    }
+
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
 }
 
 static void dap_handle_read_virt_memory(const uint64_t cpu_id, const uint64_t address)
@@ -673,8 +694,23 @@ static void dap_handle_read_virt_memory(const uint64_t cpu_id, const uint64_t ad
         return;
     }
 
-    // alert(DAP_PREFIX "Received ReadVirtMemoryRequest for virtual address %#0" PRIx64 ", translated to physical address %#0" PRIx64, address, phys_addr);
     dap_handle_read_phys_memory(phys_addr);
+}
+
+static void dap_handle_write_virt_memory(const uint64_t cpu_id, const uint64_t address, const uint64_t value)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    const ptr64_t virt_addr = {.ptr = address};
+    ptr36_t phys_addr = 0;
+    if (!cpu_convert_addr(cpu, virt_addr, &phys_addr, false)) {
+        alert(DAP_PREFIX "Failed to translate virtual address %#0" PRIx64 "!", address);
+        dap_send_response((dap_response_t){ StatusBadAddressError, address, 0x00, 0x00});
+        return;
+    }
+
+    dap_handle_write_phys_memory(phys_addr, value);
 }
 
 static void dap_handle_get_config(void)
@@ -781,8 +817,14 @@ void dap_process(void)
         case ReadPhysMemoryRequest:
             dap_handle_read_phys_memory(request.arg0);
             continue;
+        case WritePhysMemoryRequest:
+            dap_handle_write_phys_memory(request.arg0, request.arg1);
+            continue;
         case ReadVirtMemoryRequest:
             dap_handle_read_virt_memory(request.arg0, request.arg1);
+            continue;
+        case WriteVirtMemoryRequest:
+            dap_handle_write_virt_memory(request.arg0, request.arg1, request.arg2);
             continue;
         case GetConfigRequest:
             dap_handle_get_config();
