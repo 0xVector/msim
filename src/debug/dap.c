@@ -423,6 +423,21 @@ static bool dap_validate_phys_addr_or_respond_error(const uint64_t address, ptr3
     return true;
 }
 
+static bool dap_translate_virt_or_respond_error(const uint64_t cpu_id, const uint64_t virt_addr, ptr36_t* out_phys_addr)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return false;
+
+    const ptr64_t virt = {.ptr = virt_addr};
+    if (!cpu_convert_addr(cpu, virt, out_phys_addr, false)) {
+        alert(DAP_PREFIX "Failed to translate virtual address %#0" PRIx64 "!", virt_addr);
+        dap_send_response((dap_response_t){ StatusBadAddressError, virt_addr, 0x00, 0x00});
+        return false;
+    }
+
+    return true;
+}
+
 /* Simulator events */
 
 void dap_event_hit_code_breakpoint(const unsigned int cpu_no)
@@ -683,34 +698,24 @@ static void dap_handle_write_phys_memory(const uint64_t address, const uint64_t 
 
 static void dap_handle_read_virt_memory(const uint64_t cpu_id, const uint64_t address)
 {
-    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
-    if (cpu == NULL) return;
-
-    const ptr64_t virt_addr = {.ptr = address};
     ptr36_t phys_addr = 0;
-    if (!cpu_convert_addr(cpu, virt_addr, &phys_addr, false)) {
-        alert(DAP_PREFIX "Failed to translate virtual address %#0" PRIx64 "!", address);
-        dap_send_response((dap_response_t){ StatusBadAddressError, address, 0x00, 0x00});
-        return;
-    }
-
+    dap_translate_virt_or_respond_error(cpu_id, address, &phys_addr);
     dap_handle_read_phys_memory(phys_addr);
 }
 
 static void dap_handle_write_virt_memory(const uint64_t cpu_id, const uint64_t address, const uint64_t value)
 {
-    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
-    if (cpu == NULL) return;
-
-    const ptr64_t virt_addr = {.ptr = address};
     ptr36_t phys_addr = 0;
-    if (!cpu_convert_addr(cpu, virt_addr, &phys_addr, false)) {
-        alert(DAP_PREFIX "Failed to translate virtual address %#0" PRIx64 "!", address);
-        dap_send_response((dap_response_t){ StatusBadAddressError, address, 0x00, 0x00});
-        return;
-    }
-
+    dap_translate_virt_or_respond_error(cpu_id, address, &phys_addr);
     dap_handle_write_phys_memory(phys_addr, value);
+}
+
+static void dap_handle_translate_address(const uint64_t cpu_id, const uint64_t address)
+{
+    ptr36_t phys_addr = 0;
+    if (dap_translate_virt_or_respond_error(cpu_id, address, &phys_addr)) {
+        dap_send_response((dap_response_t){ StatusOk, phys_addr, 0x00, 0x00});
+    }
 }
 
 static void dap_handle_get_config(void)
@@ -825,6 +830,9 @@ void dap_process(void)
             continue;
         case WriteVirtMemoryRequest:
             dap_handle_write_virt_memory(request.arg0, request.arg1, request.arg2);
+            continue;
+        case TranslateAddressRequest:
+            dap_handle_translate_address(request.arg0, request.arg1);
             continue;
         case GetConfigRequest:
             dap_handle_get_config();

@@ -38,7 +38,7 @@ load "common"
     msim_dap_run "dap-simple-riscv32" "scenario_cpu_info.py"
 }
 
-@test "DAP RISC-V32: Memory read / write" {
+@test "DAP RISC-V32: Memory" {
     msim_dap_run "dap-simple-riscv32" "scenario_mem.py"
 }
 
@@ -82,7 +82,7 @@ load "common"
     msim_dap_run "dap-simple-riscv64" "scenario_cpu_info.py"
 }
 
-@test "DAP RISC-V64: Memory read / write" {
+@test "DAP RISC-V64: Memory" {
     msim_dap_run "dap-simple-riscv64" "scenario_mem.py"
 }
 
@@ -126,7 +126,7 @@ load "common"
     msim_dap_run "dap-simple-mips32" "scenario_cpu_info.py"
 }
 
-@test "DAP MIPS32: Memory read / write" {
+@test "DAP MIPS32: Memory" {
     msim_dap_run "dap-simple-mips32" "scenario_mem.py"
 }
 

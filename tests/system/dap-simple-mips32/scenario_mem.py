@@ -43,5 +43,9 @@ for addr in range(START, START + READ_SIZE + 1, READ_SIZE):
     adp.send(WriteVirtMemoryRequest, arg0=DEFAULT_CPU, arg1=at(addr), arg2=value).expect_response()
     adp.send(ReadPhysMemoryRequest, arg0=at_phys(addr)).expect_response(StatusOk, arg0=value, arg1=0x00, arg2=0x00)
 
+# Check address translation
+adp.send(TranslateAddressRequest, arg0=DEFAULT_CPU, arg1=at(0)).expect_response(StatusOk, arg0=at_phys(0))
+adp.send(TranslateAddressRequest, arg0=DEFAULT_CPU, arg1=at(PROGRAM_LEN)).expect_response(StatusOk, arg0=at_phys(PROGRAM_LEN))
+
 adp.send(TerminateRequest).expect_response().expect_event(TerminatedEvent)
 adp.close()
