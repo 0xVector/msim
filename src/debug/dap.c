@@ -718,6 +718,26 @@ static void dap_handle_translate_address(const uint64_t cpu_id, const uint64_t a
     }
 }
 
+static void dap_handle_raise_interrupt(const uint64_t cpu_id, const uint64_t interrupt_id)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    cpu_interrupt_up(cpu, interrupt_id);
+    alert(DAP_PREFIX "Raised interrupt ID %" PRIu64 " on CPU %" PRIu64 ".", interrupt_id, cpu_id);
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+}
+
+static void dap_handle_clear_interrupt(const uint64_t cpu_id, const uint64_t interrupt_id)
+{
+    general_cpu_t* cpu = get_cpu_or_respond_error(cpu_id);
+    if (cpu == NULL) return;
+
+    cpu_interrupt_down(cpu, interrupt_id);
+    alert(DAP_PREFIX "Cleared interrupt ID %" PRIu64 " on CPU %" PRIu64 ".", interrupt_id, cpu_id);
+    dap_send_response((dap_response_t){ StatusOk, 0x00, 0x00, 0x00});
+}
+
 static void dap_handle_get_config(void)
 {
     uint64_t cpu_count = 0;
@@ -833,6 +853,12 @@ void dap_process(void)
             continue;
         case TranslateAddressRequest:
             dap_handle_translate_address(request.arg0, request.arg1);
+            continue;
+        case RaiseInterruptRequest:
+            dap_handle_raise_interrupt(request.arg0, request.arg1);
+            continue;
+        case ClearInterruptRequest:
+            dap_handle_clear_interrupt(request.arg0, request.arg1);
             continue;
         case GetConfigRequest:
             dap_handle_get_config();

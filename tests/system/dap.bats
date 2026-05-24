@@ -42,6 +42,10 @@ load "common"
     msim_dap_run "dap-simple-riscv32" "scenario_mem.py"
 }
 
+@test "DAP RISC-V32: Interrupts" {
+    msim_dap_run "dap-simple-riscv32" "scenario_interrupts.py"
+}
+
 @test "DAP RISC-V32: Bad request" {
     msim_dap_run "dap-simple-riscv32" "scenario_bad_req.py"
 }
@@ -84,6 +88,10 @@ load "common"
 
 @test "DAP RISC-V64: Memory" {
     msim_dap_run "dap-simple-riscv64" "scenario_mem.py"
+}
+
+@test "DAP RISC-V64: Interrupts" {
+    msim_dap_run "dap-simple-riscv64" "scenario_interrupts.py"
 }
 
 @test "DAP RISC-V64: Bad request" {
@@ -130,6 +138,10 @@ load "common"
     msim_dap_run "dap-simple-mips32" "scenario_mem.py"
 }
 
+@test "DAP MIPS32: Interrupts" {
+    msim_dap_run "dap-simple-mips32" "scenario_interrupts.py"
+}
+
 @test "DAP MIPS32: Bad request" {
     msim_dap_run "dap-simple-mips32" "scenario_bad_req.py"
 }
@@ -164,6 +176,10 @@ load "common"
 
 @test "DAP Multiarch (RV32+RV64): PC" {
     msim_dap_run "dap-simple-multiarch" "scenario_pc.py"
+}
+
+@test "DAP Multiarch (RV32+RV64): Interrupts" {
+    msim_dap_run "dap-simple-multiarch" "scenario_interrupts.py"
 }
 
 @test "DAP Multiarch (RV32+RV64): CPU info" {
